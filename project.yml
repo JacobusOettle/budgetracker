@@ -1,0 +1,45 @@
+name: Envelope
+options:
+  bundleIdPrefix: com.jacobusoettle
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  Envelope:
+    type: application
+    platform: iOS
+    sources: [Envelope]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Envelope
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        CODE_SIGN_STYLE: Automatic
+  EnvelopeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [EnvelopeTests]
+    dependencies:
+      - target: Envelope
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Envelope:
+    build:
+      targets:
+        Envelope: all
+        EnvelopeTests: [test]
+    test:
+      targets: [EnvelopeTests]
