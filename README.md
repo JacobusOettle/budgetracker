@@ -94,24 +94,35 @@ only leaves your phone when you share it.
 3. Tap **Simulate → Simulate currency payment**. A row `R42.50` appears.
 4. Swipe the rows away, or use **Simulate → Clear all**.
 
-### 2. Create the Transaction automation
-1. Open **Shortcuts → Automation** tab → **+** (or **New Automation**).
-2. Choose **Transaction**.
-3. Under **Card**, select **both** your FNB and Capitec cards. Leave categories and
-   merchants as "any".
-4. Choose **Run Immediately**, and turn **Notify When Run** off. Tap **Next**.
-5. Choose **New Blank Automation** → **Add Action** → search **Envelope** → add
-   **Log Payment**.
-6. Fill in its parameters. Tap a field, choose **Shortcut Input**, then tap the blue
-   *Shortcut Input* token and pick the property:
-   - **Amount** → Shortcut Input › **Amount**
-   - **Merchant** → Shortcut Input › **Merchant**
-   - **Card** (tap "Show More") → Shortcut Input › **Card or Pass** (the name may differ slightly)
-   - **Raw Input** → **Shortcut Input** itself, with no property selected
-7. Add a second action: search **Envelope** → **Log Payment (Currency Amount)**. Map
-   Amount, Merchant and Card the same way. If Shortcuts won't let you put *Amount*
-   into its Amount field, that's useful data. Note it and remove the action.
-8. Tap **Done**.
+### 2. Create the Wallet automation (iOS 26)
+On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call it
+**Transaction**.
+
+1. Open **Shortcuts** and tap **Automation** at the bottom.
+2. Tap **+** (top right), or **New Automation** if you have none yet.
+3. Scroll the trigger list and tap **Wallet**.
+4. Under **When I tap**, select your **FNB** and **Capitec** cards.
+5. Under **Category**, untick **Transport**. Leave **Merchant** empty.
+6. At the bottom, select **Run Immediately** (not "Run After Confirmation"). Tap **Next**.
+7. Tap **New Blank Automation** (some versions say **Create New Shortcut**).
+8. In the search bar at the bottom, type **Envelope** and tap **Log Payment**. The
+   action reads: *Log* **Amount** *at* **Merchant**.
+9. Connect the fields:
+   1. Tap the faded word **Amount** in the action.
+   2. A row of suggestions appears above the keyboard. Swipe it sideways and tap
+      **Shortcut Input**.
+   3. The field now shows a blue **Shortcut Input** bubble. Tap the bubble, and from
+      the list choose **Amount**. The bubble should now say *Amount*.
+   4. Do the same for **Merchant**, choosing **Merchant**.
+   5. Tap the small **›** arrow on the right of the action to show **Card** and
+      **Raw Input**. Set Card the same way, choosing **Card or Pass**. For Raw
+      Input, pick **Shortcut Input** and **don't** choose a property.
+10. Optional: search **Envelope** again, add **Log Payment (Currency Amount)** and
+    connect it the same way. If it won't accept *Amount*, delete it and tell me.
+11. Tap **Done** (top right).
+
+Don't test with the ▶︎ play button in Shortcuts. It sends no payment data, so every
+field arrives empty. Only a real tap at a card machine counts.
 
 ### 3. Pay for real
 Make a small Apple Pay purchase **with each card**. A few rand is fine, for example
