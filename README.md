@@ -102,7 +102,8 @@ On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call i
 2. Tap **+** (top right), or **New Automation** if you have none yet.
 3. Scroll the trigger list and tap **Wallet**.
 4. Under **When I tap**, select your **FNB** and **Capitec** cards.
-5. Under **Category**, untick **Transport**. Leave **Merchant** empty.
+5. Leave every **Category** ticked, including **Transport**, which likely covers
+   fuel, parking and Uber. Leave **Merchant** empty.
 6. At the bottom, select **Run Immediately** (not "Run After Confirmation"). Tap **Next**.
 7. Tap **New Blank Automation** (some versions say **Create New Shortcut**).
 8. In the search bar at the bottom, type **Envelope** and tap **Log Payment**. The
