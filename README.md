@@ -32,6 +32,55 @@ Both intents set `openAppWhenRun = false`, so they should work with **Run Immedi
 without opening the app. Each one posts a local notification
 ("Envelope logged…") so you can see at the till that it ran.
 
+## Belongings: saving to replace things
+
+The **Belongings** tab keeps your *replacement savings* separate from your
+*true savings*.
+
+- **Add something you own:** name, category, date bought, price, and optionally
+  what the next one will cost and how much you've already saved for it.
+- **How long it will last** is decided in this order:
+  1. **Your own estimate**, if you set one ("Set my own lifespan").
+  2. **How long your last one lasted**, if you've owned one before. You can
+     enter this when adding the item. When you replace something in the app, the
+     months it actually lasted are filled in for the next one automatically.
+  3. **A typical lifespan for the category**, for example 3 years for a phone or
+     12 years for a fridge. These are rough estimates built into the app (see
+     `Envelope/BelongingCategory.swift`), not real population statistics. The app
+     has no internet access, so it can't look anything up.
+- **Monthly amount** = (target − already saved) ÷ months left, rounded **up** to
+  the cent. A new R24 000 phone that should last 4 years is R500/month. If you add
+  an item halfway through its life, or the fund falls behind, it catches up over
+  the time that's left.
+- **Each month**, tap **Record November contributions**. Envelope can't move money,
+  so you make the transfer in your banking app and then confirm. You can record a
+  month only once.
+- **Outlasting its expected life:** once an item reaches its expected date fully
+  funded, contributions stop. Everything you save after that counts as true savings.
+- **Replacing it:** the fund pays for the new one.
+  - **Cheaper than the fund?** The leftover moves to true savings.
+  - **Dearer, or it broke early?** The shortfall comes out of true savings. Either
+    buy a cheaper one or use savings.
+  - **Got rid of it without replacing?** Its whole fund moves to true savings.
+- **True savings** = your total savings balance (which you type in from your
+  banking app) − everything set aside for replacements. If it goes negative, the
+  app warns you that the replacement funds aren't fully backed.
+
+## Export for AI analysis
+
+The **Export** tab creates one file, `envelope-export-YYYY-MM-DD.json`, holding
+everything: your savings split, belongings, each fund's history, ownership history
+and logged payments. JSON was chosen because AI assistants read it reliably:
+
+- The file starts with an `"about"` section that explains every section and field
+  in plain English.
+- Money is stored as exact rand strings (`"24000.00"`), never as rounded floats.
+- Derived values are included, such as the monthly contribution, months left,
+  plan status and how long past items lasted. An AI doesn't have to recalculate them.
+
+Share it (AirDrop, Files, a chat app) and attach it to any AI assistant. The file
+only leaves your phone when you share it.
+
 ## Testing the spike on your iPhone (FNB and Capitec)
 
 ### 0. Requirements
@@ -152,6 +201,8 @@ or Finder (drag it onto the phone).
 - No backend, accounts, analytics or bank credentials.
 
 ## Next steps (after the spike is confirmed)
+The belongings, replacement funds and export are built. They don't depend on the
+Shortcuts trigger. Still waiting on spike confirmation:
 Data model and arming logic (10-minute expiry, idempotent logging, Unassigned
 payments and notifications), then the budget UI, transaction history, manual entry,
 the missed-payment reminder, the month-end screen and an in-app Shortcuts setup guide.

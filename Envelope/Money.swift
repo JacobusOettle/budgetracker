@@ -31,3 +31,14 @@ enum Money {
         return "\(sign)R\(groups.joined(separator: " ")).\(centsText)"
     }
 }
+
+extension Money {
+    /// Exact plain decimal string for export: 2400000 -> "24000.00",
+    /// -5 -> "-0.05". No currency symbol or grouping.
+    static func plain(cents: Int) -> String {
+        let sign = cents < 0 ? "-" : ""
+        let magnitude = cents.magnitude
+        let remainder = magnitude % 100
+        return "\(sign)\(magnitude / 100).\(remainder < 10 ? "0" : "")\(remainder)"
+    }
+}

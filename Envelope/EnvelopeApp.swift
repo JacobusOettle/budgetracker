@@ -8,7 +8,7 @@ struct EnvelopeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DebugPaymentListView()
+            RootView()
                 .task { await Notifier.requestAuthorization() }
         }
         .modelContainer(Persistence.shared)
