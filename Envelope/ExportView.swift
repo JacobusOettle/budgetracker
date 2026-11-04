@@ -7,30 +7,28 @@ struct ExportView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text("Exports everything in Envelope as one JSON file: savings, belongings, replacement funds and their history, and logged payments.")
-                    Text("It's written to be read by an AI assistant. Amounts are exact rand values, and the file starts with an \"about\" section explaining every field. Attach it to a chat and ask your questions.")
-                        .foregroundStyle(.secondary)
-                }
-                Section {
-                    Button("Create export file") { prepare() }
-                    if let fileURL {
-                        ShareLink(item: fileURL) {
-                            Label("Share \(fileURL.lastPathComponent)", systemImage: "square.and.arrow.up")
-                        }
+        List {
+            Section {
+                Text("Exports everything in Envelope as one JSON file: budgets, payments, month-ends, savings, belongings and replacement funds.")
+                Text("It's written to be read by an AI assistant. Amounts are exact rand values, and the file starts with an \"about\" section explaining every field. Attach it to a chat and ask your questions.")
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Button("Create export file") { prepare() }
+                if let fileURL {
+                    ShareLink(item: fileURL) {
+                        Label("Share \(fileURL.lastPathComponent)", systemImage: "square.and.arrow.up")
                     }
-                } footer: {
-                    Text("The file only leaves your phone if you share it.")
                 }
+            } footer: {
+                Text("The file only leaves your phone if you share it.")
             }
-            .navigationTitle("Export")
-            .alert("Export failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage ?? "")
-            }
+        }
+        .navigationTitle("Export")
+        .alert("Export failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
         }
     }
 

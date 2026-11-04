@@ -1,36 +1,67 @@
-# Envelope (spike)
+# Envelope
 
-Envelope is an iPhone budgeting app. You tap a budget before paying with Apple Pay,
-and an iOS Shortcuts **Transaction** automation tells Envelope about the payment.
-It never connects to a bank, and all data stays on the phone.
+Envelope is an iPhone budgeting app for rand. Tap a budget, such as Food, just
+before you pay with Apple Pay. An iOS Shortcuts **Wallet** automation then tells
+Envelope about the payment, and it's logged to that budget. Envelope never connects
+to a bank, has no account or analytics, and all data stays on the phone.
 
-**Current state: build step 1, the spike.** This build only proves that the
-Transaction automation can call Envelope's App Intent in the background and pass
-the amount, merchant and card. Each payment it receives goes into a debug list.
-There are no budgets, arming or deductions yet. Those come once the spike works
-on your phone.
+## Using Envelope
 
-## What's in the spike
+**Budgets tab (home)**
+- Each budget shows **what's left this month** in rand. The amount turns orange
+  when 20% or less is left and red when it's empty or over budget.
+- **Tap a budget to arm it.** It stays armed for **10 minutes**, with a countdown,
+  or until a payment arrives. Tap it again to disarm. Arming one budget disarms
+  the others.
+- If the armed budget is low or empty, the card says so clearly. **Envelope can't
+  block a payment**, and the app never implies it can.
+- The **+** menu has New budget, Add a payment and Month end. **Long-press** a
+  budget to edit it, see its payments or remove it. A removed budget with payments
+  is archived, so history and past months still add up.
 
-| Piece | File |
-|---|---|
-| App Intent **Log Payment** (amount as text, parsed by us) | `Envelope/LogPaymentIntents.swift` |
-| App Intent **Log Payment (Currency Amount)** (amount as a typed currency value) | `Envelope/LogPaymentIntents.swift` |
-| Amount parser (`R 1 234,56`, `R1,234.56`, `ZAR 99.99`…) → integer cents | `Envelope/AmountParser.swift` |
-| Money helpers (Decimal → cents, half-away-from-zero rounding, `R1 234.56` formatting) | `Envelope/Money.swift` |
-| SwiftData debug log, flags (doesn't drop) repeats within 2 minutes | `Envelope/PaymentLogger.swift`, `Envelope/DebugPayment.swift` |
-| Debug list screen with Simulate, Share log and Clear | `Envelope/DebugPaymentListView.swift` |
-| Unit tests | `EnvelopeTests/` |
+**When a payment arrives** (from the automation):
+1. **Armed budget:** the payment is logged there and the budget disarms. You get a
+   notification like "R100.70 → Food, R2 899.30 left".
+2. **Nothing armed:** it's saved as **Unassigned** and you get a notification
+   asking you to assign it. The home screen shows a "to sort out" banner.
+3. **The same amount, merchant and card again within 2 minutes:** ignored. A
+   repeated Shortcut run can't deduct twice. The catch is that two genuinely
+   identical taps that close together count once, so add the second one by hand.
+4. **Unreadable amount, or not in rand:** it's saved and flagged for you to check.
 
-There are two intents on purpose. Developers report that the way Shortcut Input
-maps to intent parameters, especially *Amount*, is unreliable. The text variant
-takes whatever Shortcuts sends and parses it. The currency variant shows whether
-the typed mapping works. You add both to the same automation, and each logs its
-own row, tagged `text` or `currency`.
+**History tab:** every payment, grouped by month, with the ones to sort out at the
+top. Tap a payment to edit or reassign it, swipe to delete, long-press to assign
+quickly. Use **+** for online purchases and missed payments.
 
-Both intents set `openAppWhenRun = false`, so they should work with **Run Immediately**
-without opening the app. Each one posts a local notification
-("Envelope logged…") so you can see at the till that it ran.
+**Month end:** shows what each budget has left, the unassigned spending, and the
+**total to move to savings**. Overspending in one budget eats into the others,
+unassigned spending is taken off, and the total is never negative. If you track
+belongings, it also shows how much of that goes to replacement funds and how much
+is true savings. Envelope can't move money, so you transfer it in your banking
+app, enter what you moved and confirm. Your savings balance goes up by that
+amount, that month's replacement contributions are recorded, and budgets start
+fresh with the new calendar month. Closing a month twice does nothing. A banner on
+the home screen reminds you of any past month you haven't closed.
+
+**Settings:** the Shortcuts setup guide, **Send a test payment** (runs the real
+payment path with R12.34), the daily **missed-payment reminder** (on by default at
+20:00), and export.
+
+## Spike results (4 Nov 2026, iPhone on iOS 26, FNB virtual card)
+
+- **Amount arrives as text**, for example `"R 100.70"`. It's parsed to cents
+  correctly. Envelope therefore uses a text parameter for Amount.
+- **Merchant and card name arrive intact**, for example "KFC Wierda Park" and
+  "New FNB Fusion Virtual Premier25".
+- **It runs in the background with the phone locked** (Run Immediately), and
+  arrives at the same moment as FNB's own SMS.
+- **The typed "Currency Amount" parameter failed** with "Couldn't communicate with
+  a helper application". That action was removed. If you added it during testing,
+  delete it from the automation.
+- The confirmation popup that appeared after a payment is gone. The action no
+  longer returns a dialog, so only the notification shows.
+- **Not yet tested:** the Capitec card, whether "Always Allow" prompts come back,
+  and a run after force-quitting the app.
 
 ## Belongings: saving to replace things
 
@@ -81,20 +112,11 @@ and logged payments. JSON was chosen because AI assistants read it reliably:
 Share it (AirDrop, Files, a chat app) and attach it to any AI assistant. The file
 only leaves your phone when you share it.
 
-## Testing the spike on your iPhone (FNB and Capitec)
+## Setting up the Apple Pay automation
 
-### 0. Requirements
-- An iPhone on iOS 17 or later, with your FNB and Capitec cards added to Apple Wallet.
-- Envelope installed (see [Installing](#installing-on-your-iphone) below).
+The same steps are in the app under **Settings → Shortcuts setup guide**.
 
-### 1. Check the app logs anything at all
-1. Open Envelope and **allow notifications** when asked.
-2. Tap **Simulate → Simulate text payment**. A row `R1 234.56 · Test Merchant` appears
-   along with a banner.
-3. Tap **Simulate → Simulate currency payment**. A row `R42.50` appears.
-4. Swipe the rows away, or use **Simulate → Clear all**.
-
-### 2. Create the Wallet automation (iOS 26)
+### Create the Wallet automation (iOS 26)
 On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call it
 **Transaction**.
 
@@ -115,37 +137,20 @@ On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call i
    3. The field now shows a blue **Shortcut Input** bubble. Tap the bubble, and from
       the list choose **Amount**. The bubble should now say *Amount*.
    4. Do the same for **Merchant**, choosing **Merchant**.
-   5. Tap the small **›** arrow on the right of the action to show **Card** and
-      **Raw Input**. Set Card the same way, choosing **Card or Pass**. For Raw
-      Input, pick **Shortcut Input** and **don't** choose a property.
-10. Optional: search **Envelope** again, add **Log Payment (Currency Amount)** and
-    connect it the same way. If it won't accept *Amount*, delete it and tell me.
-11. Tap **Done** (top right).
+   5. Tap the small **›** arrow on the right of the action to show **Card**. Set it
+      the same way, choosing **Card or Pass**. Leave **Raw Input** empty (it's no
+      longer used), and switch **Show When Run** off.
+10. Tap **‹** at the top left to save.
 
 Don't test with the ▶︎ play button in Shortcuts. It sends no payment data, so every
 field arrives empty. Only a real tap at a card machine counts.
 
-### 3. Pay for real
-Make a small Apple Pay purchase **with each card**. A few rand is fine, for example
-a coffee or parking. After each one:
-- Did an "Envelope logged…" notification appear? How long after paying?
-- Did Shortcuts show any "Allow Envelope…?" prompt? If you tapped **Always Allow**,
-  did it ask again on the next payment?
-- Open Envelope. Is there one row per action (`text` and `currency`)? Is the amount
-  right to the cent? Are the merchant and card names filled in?
-- Are there any rows marked **DUPLICATE?**? That would mean the automation fired twice.
-
-Also try **one payment with the iPhone locked** and **one right after force-quitting
-Envelope** from the app switcher. That checks the intent really runs in the background.
-
-### 4. Send me the results
-In Envelope, tap **Share log** (top left) and paste the text into our chat. It holds
-the raw amount string exactly as Shortcuts sent it, which is what decides the
-amount parsing for the real app. Also tell me what you saw for each question in
-step 3.
-
-> The Transaction trigger only fires on real NFC payments on a physical iPhone.
-> It can't be tested in the simulator or in CI.
+### Limits of the automation
+- Online and in-app purchases don't trigger it. Add them under History → +.
+- iOS can occasionally miss or delay a payment. The daily reminder covers this.
+- A declined tap may still be logged. Delete it in History.
+- It can only be tested with real taps on a physical iPhone. The ▶︎ button in
+  Shortcuts sends empty fields.
 
 ## Installing on your iPhone
 
@@ -212,9 +217,8 @@ or Finder (drag it onto the phone).
   never `Double`. Rounding is half away from zero. The default currency is ZAR.
 - No backend, accounts, analytics or bank credentials.
 
-## Next steps (after the spike is confirmed)
-The belongings, replacement funds and export are built. They don't depend on the
-Shortcuts trigger. Still waiting on spike confirmation:
-Data model and arming logic (10-minute expiry, idempotent logging, Unassigned
-payments and notifications), then the budget UI, transaction history, manual entry,
-the missed-payment reminder, the month-end screen and an in-app Shortcuts setup guide.
+## What isn't verified
+The unit tests cover arming and expiry, deductions, duplicates, unassigned
+payments, month-end totals, rand parsing and rounding, replacement funds and the
+export. CI runs them on every push. No one has yet seen the screens on a phone or
+simulator, and the automation has only been tested with one FNB card.

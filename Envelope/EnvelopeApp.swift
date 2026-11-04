@@ -9,7 +9,10 @@ struct EnvelopeApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .task { await Notifier.requestAuthorization() }
+                .task {
+                    await Notifier.requestAuthorization()
+                    await ReminderScheduler.apply()
+                }
         }
         .modelContainer(Persistence.shared)
     }

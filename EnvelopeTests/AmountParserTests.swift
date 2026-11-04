@@ -7,6 +7,9 @@ final class AmountParserTests: XCTestCase {
         XCTAssertEqual(parsed, ParsedAmount(cents: cents, currencyCode: currency), "input: \(input)", file: file, line: line)
     }
 
+    /// Exactly what the Wallet automation sent for an FNB card on iOS 26.
+    func testRealFNBWalletAmount() { assertParses("R 100.70", cents: 10070, currency: "ZAR") }
+    func testRealFormatWithNonBreakingSpace() { assertParses("R\u{00A0}100.70", cents: 10070, currency: "ZAR") }
     func testRandWithDotDecimal() { assertParses("R45.00", cents: 4500, currency: "ZAR") }
     func testRandWithSpaceGroupingAndCommaDecimal() { assertParses("R 1 234,56", cents: 123456, currency: "ZAR") }
     func testRandWithNonBreakingSpace() { assertParses("R\u{00A0}12,30", cents: 1230, currency: "ZAR") }

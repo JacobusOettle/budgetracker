@@ -6,6 +6,9 @@ import SwiftData
 enum Persistence {
     static let schema = Schema([
         DebugPayment.self,
+        Budget.self,
+        Payment.self,
+        MonthClose.self,
         Belonging.self,
         Ownership.self,
         FundEntry.self,
