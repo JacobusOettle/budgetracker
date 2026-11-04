@@ -44,6 +44,8 @@ enum PaymentSource: String, Codable {
     case manual
     /// "Send a test payment" in Settings.
     case test
+    /// Imported from a bank statement (CSV).
+    case statement = "import"
 }
 
 /// A card payment. `budget == nil` means Unassigned.
@@ -116,6 +118,8 @@ enum Assignment: String, Codable {
     case ai
     /// The AI picked it and you confirmed it.
     case aiConfirmed
+    /// Sorted by the AI during a bank statement import you reviewed.
+    case imported
 
     var isAI: Bool { self == .ai || self == .aiConfirmed }
 }

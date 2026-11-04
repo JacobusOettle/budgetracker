@@ -178,6 +178,10 @@ struct PaymentRow: View {
                             Label(payment.assignment == .ai ? "Auto" : "Auto ✓", systemImage: "sparkles")
                                 .labelStyle(.titleAndIcon)
                                 .foregroundStyle(.purple)
+                        } else if payment.assignment == .imported {
+                            Label("Imported", systemImage: "doc.text")
+                                .labelStyle(.titleAndIcon)
+                                .foregroundStyle(.teal)
                         }
                     } else {
                         Text("Unassigned").foregroundStyle(.orange).bold()
@@ -207,6 +211,7 @@ struct PaymentRow: View {
         case .shortcut: "wave.3.right"
         case .manual: "square.and.pencil"
         case .test: "testtube.2"
+        case .statement: "doc.text"
         }
     }
 }

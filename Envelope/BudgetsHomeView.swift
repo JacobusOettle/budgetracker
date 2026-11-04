@@ -14,6 +14,7 @@ struct BudgetsHomeView: View {
     @State private var showingNewPayment = false
     @State private var editingBudget: Budget?
     @State private var viewingBudget: Budget?
+    @State private var importingStatement = false
     @State private var removingBudget: Budget?
     @State private var monthEnd: MonthTarget?
     @State private var errorMessage: String?
@@ -39,6 +40,7 @@ struct BudgetsHomeView: View {
                     Menu {
                         Button("New budget", systemImage: "plus") { showingNewBudget = true }
                         Button("Add a payment", systemImage: "square.and.pencil") { showingNewPayment = true }
+                        Button("Import bank statement…", systemImage: "doc.text") { importingStatement = true }
                         Button("Month end…", systemImage: "calendar.badge.checkmark") {
                             monthEnd = MonthTarget(start: MonthMath.startOfMonth(.now))
                         }
@@ -48,6 +50,7 @@ struct BudgetsHomeView: View {
                 }
             }
             .sheet(isPresented: $showingNewBudget) { BudgetFormView(budget: nil) }
+            .sheet(isPresented: $importingStatement) { StatementImportView() }
             .sheet(item: $editingBudget) { BudgetFormView(budget: $0) }
             .sheet(isPresented: $showingNewPayment) { PaymentFormView(payment: nil) }
             .sheet(item: $monthEnd) { MonthEndView(month: $0.start) }
@@ -110,9 +113,10 @@ struct BudgetsHomeView: View {
 
             if budgets.isEmpty {
                 Section {
-                    Text("Add budgets like Food, Fuel and Fun, each with a monthly amount.")
+                    Text("Add budgets like Food, Fuel and Fun, each with a monthly amount, or let the AI set them up from a bank statement.")
                         .foregroundStyle(.secondary)
                     Button("Add your first budget") { showingNewBudget = true }
+                    Button("Import a bank statement (CSV)…") { importingStatement = true }
                 }
             } else {
                 Section {

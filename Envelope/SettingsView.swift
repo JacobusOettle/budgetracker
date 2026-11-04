@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage(ReminderScheduler.enabledKey) private var reminderEnabled = true
     @AppStorage(ReminderScheduler.hourKey) private var reminderHour = ReminderScheduler.defaultHour
     @AppStorage(ReminderScheduler.minuteKey) private var reminderMinute = 0
+    @State private var importingStatement = false
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,7 @@ struct SettingsView: View {
                 }
 
                 Section("Data") {
+                    Button("Import bank statement (CSV)…") { importingStatement = true }
                     NavigationLink("Export for AI analysis") { ExportView() }
                 }
 
@@ -48,6 +50,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $importingStatement) { StatementImportView() }
             .onChange(of: reminderEnabled) { reschedule() }
             .onChange(of: reminderHour) { reschedule() }
             .onChange(of: reminderMinute) { reschedule() }

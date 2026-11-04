@@ -184,7 +184,7 @@ enum AutoCategorizer {
 enum PaymentAssignment {
     static func assign(_ payment: Payment, to budget: Budget?) {
         guard payment.budget?.id != budget?.id else { return }
-        if payment.assignment.isAI, let old = payment.budget {
+        if payment.assignment.isAI || payment.assignment == .imported, let old = payment.budget {
             payment.aiOriginalBudgetName = old.name
         }
         payment.budget = budget
