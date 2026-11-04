@@ -18,8 +18,8 @@ final class StatementImportTests: XCTestCase {
     private let cal = TestCalendar.utc
     private func d(_ y: Int, _ m: Int, _ day: Int) -> Date { TestCalendar.date(y, m, day) }
 
-    private func tx(_ date: Date, _ desc: String, _ cents: Int, _ kind: StatementImport.Kind = .spend, _ category: String = "Groceries") -> StatementImport.Transaction {
-        .init(date: date, description: desc, cents: cents, kind: kind, category: category, rawAmount: Money.plain(cents: cents), fileName: "fnb.csv")
+    private func tx(_ date: Date, _ desc: String, _ cents: Int, _ kind: StatementImport.Kind = .spend, _ category: String = "Groceries", file: String = "fnb.csv") -> StatementImport.Transaction {
+        .init(date: date, description: desc, cents: cents, kind: kind, category: category, rawAmount: Money.plain(cents: cents), fileName: file)
     }
 
     // MARK: CSV
@@ -123,7 +123,7 @@ final class StatementImportTests: XCTestCase {
         let plan = StatementImport.plan(
             transactions: [
                 tx(d(2026, 10, 1), "Checkers", 50_000),
-                tx(d(2026, 10, 1), "Checkers", 50_000),                 // repeated across files
+                tx(d(2026, 10, 1), "Checkers", 50_000, file: "fnb-overlap.csv"),  // same row in an overlapping export
                 tx(d(2026, 10, 2), "KFC", 10_070, .spend, "Eating out"),  // already logged by Apple Pay
                 tx(d(2026, 10, 3), "Engen", 60_000, .spend, "Fuel"),
                 tx(d(2026, 10, 4), "Netflix", 19_900, .spend, "Subscriptions"),
@@ -140,6 +140,55 @@ final class StatementImportTests: XCTestCase {
         XCTAssertEqual(plan.payments(for: budgets[0]).map(\.transaction.description), ["Checkers"])
         XCTAssertEqual(plan.payments(for: budgets[1]).map(\.transaction.description), ["Engen"])
         XCTAssertEqual(plan.unmatched.map(\.transaction.description), ["Netflix"])
+    }
+
+    func testIdenticalRowsInOneStatementAreAllKept() {
+        let plan = StatementImport.plan(
+            transactions: [
+                tx(d(2026, 10, 1), "Vida e Caffe", 3_500, .spend, "Eating out"),
+                tx(d(2026, 10, 1), "Vida e Caffe", 3_500, .spend, "Eating out"),
+                // The overlapping second export has the same two coffees: no extra copies.
+                tx(d(2026, 10, 1), "Vida e Caffe", 3_500, .spend, "Eating out", file: "b.csv"),
+                tx(d(2026, 10, 1), "Vida e Caffe", 3_500, .spend, "Eating out", file: "b.csv"),
+            ],
+            budgets: [], existing: [], calendar: cal
+        )
+        XCTAssertEqual(plan.payments.count, 2)
+        XCTAssertEqual(plan.skippedDuplicates, 2)
+    }
+
+    func testEachExistingPaymentCancelsOnlyOneRow() {
+        let plan = StatementImport.plan(
+            transactions: [
+                tx(d(2026, 10, 2), "Coffee", 5_000, .spend, "Eating out"),
+                tx(d(2026, 10, 2), "Parking", 5_000, .spend, "Transport"),
+            ],
+            budgets: [],
+            existing: [(date: d(2026, 10, 2), cents: 5_000)],
+            calendar: cal
+        )
+        XCTAssertEqual(plan.skippedDuplicates, 1, "only the one already logged by Apple Pay")
+        XCTAssertEqual(plan.payments.map(\.transaction.description), ["Parking"])
+    }
+
+    func testMonthsAreTheSpanCoveredNotCalendarMonthsTouched() {
+        let summary = StatementImport.summarize([
+            tx(d(2026, 8, 15), "A", 100_000),
+            tx(d(2026, 10, 14), "B", 100_000),
+        ], calendar: cal)
+        XCTAssertEqual(summary.months, 2)
+        XCTAssertEqual(summary.categories[0].monthlyAverageCents, 100_000)
+    }
+
+    func testRetryHelpers() {
+        XCTAssertTrue(HTTPLLMClient.isRetryable(status: 429))
+        XCTAssertTrue(HTTPLLMClient.isRetryable(status: 529))
+        XCTAssertTrue(HTTPLLMClient.isRetryable(status: 503))
+        XCTAssertFalse(HTTPLLMClient.isRetryable(status: 401))
+        XCTAssertFalse(HTTPLLMClient.isRetryable(status: 400))
+        XCTAssertEqual(HTTPLLMClient.delay(attempt: 1, retryAfter: nil), 2_000_000_000)
+        XCTAssertEqual(HTTPLLMClient.delay(attempt: 2, retryAfter: "5"), 5_000_000_000)
+        XCTAssertEqual(HTTPLLMClient.delay(attempt: 9, retryAfter: nil), 30_000_000_000)
     }
 
     // MARK: Saving
@@ -163,7 +212,7 @@ final class StatementImportTests: XCTestCase {
             budgets: budgets, existing: [], calendar: cal
         )
 
-        let result = try StatementImport.apply(plan, included: ["food", "fuel"], importUnmatched: false, in: context)
+        let result = try StatementImport.apply(plan, included: ["food", "fuel"], importUnmatched: false, now: d(2026, 11, 4), in: context)
         XCTAssertEqual(result, .init(budgetsCreated: 1, budgetsReused: 1, paymentsImported: 2, unassignedImported: 0))
 
         let active = try BudgetService.activeBudgets(in: context)
@@ -173,6 +222,9 @@ final class StatementImportTests: XCTestCase {
         XCTAssertEqual(payments.count, 2)
         XCTAssertTrue(payments.allSatisfy { $0.source == .statement && $0.assignment == .imported && $0.aiAttempted })
         XCTAssertEqual(payments.first { $0.merchant == "Checkers" }?.budget?.id, existingFood.id)
+        let fuel = try XCTUnwrap(active.first { $0.name == "Fuel" })
+        XCTAssertEqual(fuel.createdAt, MonthMath.startOfMonth(d(2026, 10, 3)), "starts in the month of its first imported payment")
+        XCTAssertLessThanOrEqual(existingFood.createdAt, MonthMath.startOfMonth(d(2026, 10, 1)), "an existing budget is backdated too")
     }
 
     func testApplyCanImportUnmatchedAsUnassigned() throws {

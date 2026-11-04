@@ -323,7 +323,7 @@ enum DataExport {
         return f.string(from: date)
     }
 
-    static func dayString(_ date: Date, calendar: Calendar) -> String {
+    nonisolated static func dayString(_ date: Date, calendar: Calendar) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         func pad(_ n: Int) -> String { n < 10 ? "0\(n)" : "\(n)" }
         return "\(c.year ?? 0)-\(pad(c.month ?? 0))-\(pad(c.day ?? 0))"

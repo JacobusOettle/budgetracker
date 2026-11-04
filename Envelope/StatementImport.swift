@@ -201,14 +201,17 @@ enum StatementImport {
         guard let first = dates.min(), let last = dates.max() else {
             return SpendingSummary(months: 0, firstDate: nil, lastDate: nil, categories: [])
         }
-        let months = max(1, ReplacementPlanner.monthsBetween(first, last, calendar: calendar) + 1)
+        // Months covered, from the actual span (a statement from 15 Aug to
+        // 14 Oct is 2 months, not the 3 calendar months it touches).
+        let days = calendar.dateComponents([.day], from: first, to: last).day ?? 0
+        let months = max(1, Int((Double(days + 1) / 30.44).rounded()))
         let grouped = Dictionary(grouping: spend) { $0.category }
         let categories = grouped.map { category, items -> CategorySummary in
             let total = items.reduce(0) { $0 + $1.cents }
             let merchantCounts = Dictionary(grouping: items) { $0.description }.mapValues(\.count)
             let top = merchantCounts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(5).map(\.key)
             return CategorySummary(category: category, totalCents: total, count: items.count,
-                                   monthlyAverageCents: total / months, topMerchants: top)
+                                   monthlyAverageCents: (total + months / 2) / months, topMerchants: top)
         }
         .sorted { $0.totalCents != $1.totalCents ? $0.totalCents > $1.totalCents : $0.category < $1.category }
         return SpendingSummary(months: months, firstDate: first, lastDate: last, categories: categories)
@@ -257,7 +260,8 @@ enum StatementImport {
         for c in summary.categories {
             lines.append("- \(c.category) | \(Money.plain(cents: c.totalCents)) | \(Money.plain(cents: c.monthlyAverageCents)) | \(c.count) | \(c.topMerchants.joined(separator: ", "))")
         }
-        return LLMRequest(system: budgetSystem, user: lines.joined(separator: "\n"), schema: budgetSchema, maxTokens: 4000, effort: "medium")
+        // The JSON is small; the headroom is for the model's thinking.
+        return LLMRequest(system: budgetSystem, user: lines.joined(separator: "\n"), schema: budgetSchema, maxTokens: 16000, effort: "medium")
     }
 
     static func parseBudgets(_ text: String) -> [ProposedBudget]? {
@@ -304,8 +308,13 @@ enum StatementImport {
     }
 
     /// Matches each spending transaction to a proposed budget by category and
-    /// drops duplicates (within the files, and against payments already in
-    /// Tally on the same day for the same amount).
+    /// drops duplicates:
+    /// - Overlapping files: a row that appears in several files is imported as
+    ///   many times as it appears in any one file (two identical coffees on one
+    ///   day in one statement are both kept).
+    /// - Already in Tally: each existing payment cancels out one statement row
+    ///   on the same day for the same amount, so re-importing is safe, but
+    ///   extra same-amount rows still come in.
     static func plan(
         transactions: [Transaction],
         budgets: [ProposedBudget],
@@ -321,20 +330,40 @@ enum StatementImport {
             }
         }
 
-        let existingKeys = Set(existing.map { "\(dayKey($0.date))|\($0.cents)" })
-        var seen = Set<String>()
+        func rowKey(_ t: Transaction) -> String { "\(dayKey(t.date))|\(t.cents)|\(t.description.lowercased())" }
+
+        // How many times each row may appear: the most it appears in one file.
+        var perFile: [String: [String: Int]] = [:]
+        for t in transactions where t.kind == .spend {
+            perFile[t.fileName, default: [:]][rowKey(t), default: 0] += 1
+        }
+        var allowed: [String: Int] = [:]
+        for counts in perFile.values {
+            for (key, count) in counts { allowed[key] = max(allowed[key] ?? 0, count) }
+        }
+
+        var remainingExisting: [String: Int] = [:]
+        for e in existing { remainingExisting["\(dayKey(e.date))|\(e.cents)", default: 0] += 1 }
+
+        var used: [String: Int] = [:]
         var planned: [PlannedPayment] = []
         var notSpending = 0
         var duplicates = 0
 
         for t in transactions {
             guard t.kind == .spend else { notSpending += 1; continue }
-            let key = "\(dayKey(t.date))|\(t.cents)|\(t.description.lowercased())"
-            if seen.contains(key) || existingKeys.contains("\(dayKey(t.date))|\(t.cents)") {
+            let key = rowKey(t)
+            used[key, default: 0] += 1
+            if used[key, default: 0] > allowed[key, default: 1] {
                 duplicates += 1
                 continue
             }
-            seen.insert(key)
+            let dayAmount = "\(dayKey(t.date))|\(t.cents)"
+            if remainingExisting[dayAmount, default: 0] > 0 {
+                remainingExisting[dayAmount, default: 0] -= 1
+                duplicates += 1
+                continue
+            }
             let budgetKey = categoryToBudget[t.category.lowercased()]
                 ?? budgets.first { $0.name.compare(t.category, options: .caseInsensitive) == .orderedSame }?.id
             planned.append(PlannedPayment(transaction: t, budgetKey: budgetKey))
@@ -364,21 +393,28 @@ enum StatementImport {
     /// - `importUnmatched`: also import payments that fit no budget, as
     ///   Unassigned (they're not sent to the AI again automatically).
     /// An existing budget with the same name is reused, keeping its amount.
+    /// Budgets start from the month of their earliest imported payment, so
+    /// past months add up in Month End.
     @MainActor
     @discardableResult
     static func apply(_ plan: Plan, included: Set<String>, importUnmatched: Bool, now: Date = .now, in context: ModelContext) throws -> Result {
         let active = try BudgetService.activeBudgets(in: context)
+        // Fix your start month before budgets are backdated (see UsageStart).
+        _ = UsageStart.date(budgets: try context.fetch(FetchDescriptor<Budget>()), now: now)
         var budgetByKey: [String: Budget] = [:]
         var created = 0
         var reused = 0
         var order = (active.map(\.sortOrder).max() ?? -1) + 1
 
         for proposal in plan.budgets where included.contains(proposal.id) {
+            let earliest = plan.payments(for: proposal).map(\.transaction.date).min()
+            let start = earliest.map { min(now, MonthMath.startOfMonth($0)) } ?? now
             if let match = active.first(where: { $0.name.compare(proposal.name, options: .caseInsensitive) == .orderedSame }) {
                 budgetByKey[proposal.id] = match
+                if match.createdAt > start { match.createdAt = start }
                 reused += 1
             } else {
-                let budget = Budget(name: proposal.name, monthlyCents: proposal.monthlyCents, sortOrder: order, createdAt: now)
+                let budget = Budget(name: proposal.name, monthlyCents: proposal.monthlyCents, sortOrder: order, createdAt: start)
                 order += 1
                 context.insert(budget)
                 budgetByKey[proposal.id] = budget
@@ -462,7 +498,7 @@ final class StatementImporter: ObservableObject {
         guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty, URL(string: config.baseURL) != nil else { return nil }
         let key = KeychainStore.get(AIConfig.keychainAccount) ?? ""
         if AIPreset.named(config.presetID).needsKey && key.isEmpty { return nil }
-        return StatementImporter(client: HTTPLLMClient(config: config, apiKey: key, timeout: 300))
+        return StatementImporter(client: HTTPLLMClient(config: config, apiKey: key, timeout: 600, retries: 3))
     }
 
     /// Extracts transactions from the files, asks for budgets, and builds the
@@ -475,6 +511,7 @@ final class StatementImporter: ObservableObject {
             }
             var transactions: [StatementImport.Transaction] = []
             for (i, chunk) in chunks.enumerated() {
+                try Task.checkCancellation()
                 stage = .reading(part: i + 1, of: chunks.count, found: transactions.count)
                 transactions += try await extract(chunk, splitsLeft: 2)
             }
@@ -482,6 +519,7 @@ final class StatementImporter: ObservableObject {
                 throw StatementImport.ImportError.nothingExtracted
             }
 
+            try Task.checkCancellation()
             stage = .proposing
             let existingBudgets = try BudgetService.activeBudgets(in: context)
             let summary = StatementImport.summarize(transactions, calendar: calendar)
@@ -494,6 +532,10 @@ final class StatementImporter: ObservableObject {
             let existing = try context.fetch(FetchDescriptor<Payment>()).map { (date: $0.date, cents: $0.amountCents) }
             plan = StatementImport.plan(transactions: transactions, budgets: budgets, existing: existing, calendar: calendar)
             stage = .review
+        } catch is CancellationError {
+            stage = .idle
+        } catch let error as URLError where error.code == .cancelled {
+            stage = .idle
         } catch {
             stage = .failed(error.localizedDescription)
         }

@@ -54,6 +54,9 @@ struct HTTPLLMClient: LLMCompleting, LLMJSONCompleting {
     let config: AIConfig
     let apiKey: String
     var timeout: TimeInterval = 15
+    /// Extra attempts after a rate limit, overload, server error or dropped
+    /// connection. 0 for background categorising (no time to wait).
+    var retries: Int = 0
     var session: URLSession = .shared
 
     static let anthropicVersion = "2026-10-21"
@@ -72,13 +75,47 @@ struct HTTPLLMClient: LLMCompleting, LLMJSONCompleting {
     }
 
     private func send(_ request: URLRequest) async throws -> String {
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            let body = String(decoding: data.prefix(300), as: UTF8.self)
-            throw LLMError.http(status, body)
+        var attempt = 0
+        while true {
+            do {
+                let (data, response) = try await session.data(for: request)
+                let http = response as? HTTPURLResponse
+                let status = http?.statusCode ?? 0
+                guard (200..<300).contains(status) else {
+                    if attempt < retries, Self.isRetryable(status: status) {
+                        attempt += 1
+                        try await Task.sleep(nanoseconds: Self.delay(attempt: attempt, retryAfter: http?.value(forHTTPHeaderField: "retry-after")))
+                        continue
+                    }
+                    let body = String(decoding: data.prefix(300), as: UTF8.self)
+                    throw LLMError.http(status, body)
+                }
+                return try Self.extractText(style: config.style, data: data)
+            } catch let error as URLError where attempt < retries && Self.isRetryable(error) {
+                attempt += 1
+                try await Task.sleep(nanoseconds: Self.delay(attempt: attempt, retryAfter: nil))
+            }
         }
-        return try Self.extractText(style: config.style, data: data)
+    }
+
+    static func isRetryable(status: Int) -> Bool {
+        [408, 409, 429, 529].contains(status) || (500...599).contains(status)
+    }
+
+    static func isRetryable(_ error: URLError) -> Bool {
+        [.timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed]
+            .contains(error.code)
+    }
+
+    /// 2 s, 4 s, 8 s…, or the server's retry-after (capped at 30 s).
+    static func delay(attempt: Int, retryAfter: String?) -> UInt64 {
+        let seconds: Double
+        if let retryAfter, let value = Double(retryAfter.trimmingCharacters(in: .whitespaces)) {
+            seconds = min(30, max(0, value))
+        } else {
+            seconds = min(30, pow(2, Double(attempt)))
+        }
+        return UInt64(seconds * 1_000_000_000)
     }
 
     static func request(for prompt: CategorizationPrompt) -> LLMRequest {

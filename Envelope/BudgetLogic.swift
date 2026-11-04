@@ -82,6 +82,21 @@ struct MonthEndSummary: Equatable {
     var toSaveCents: Int { max(0, totalLeftCents - unassignedCents) }
 }
 
+/// The month you started using Tally. Month End only reminds you about
+/// months from then on, so importing a past statement (which backdates
+/// budgets) doesn't ask you to close a year of old months.
+enum UsageStart {
+    static let key = "tally.usageStart"
+
+    /// Saved the first time it's asked for: the earliest budget, or now.
+    static func date(budgets: [Budget], now: Date = .now, defaults: UserDefaults = .standard) -> Date {
+        if let saved = defaults.object(forKey: key) as? Date { return saved }
+        let start = min(now, budgets.map(\.createdAt).min() ?? now)
+        defaults.set(start, forKey: key)
+        return start
+    }
+}
+
 enum MonthEnd {
     static func summary(lines: [MonthEndLine], unassigned: [Int]) -> MonthEndSummary {
         MonthEndSummary(lines: lines, unassignedCents: unassigned.reduce(0, +), unassignedCount: unassigned.count)

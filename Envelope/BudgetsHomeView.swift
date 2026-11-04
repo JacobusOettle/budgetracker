@@ -81,7 +81,7 @@ struct BudgetsHomeView: View {
         let unassigned = payments.filter { $0.budget == nil }
         let review = payments.filter { $0.needsReview && $0.budget != nil }
         let unclosed = MonthEnd.unclosedMonths(
-            firstUse: allBudgets.first?.createdAt,
+            firstUse: allBudgets.isEmpty ? nil : UsageStart.date(budgets: allBudgets, now: now),
             closedKeys: Set(closes.map(\.monthKey)),
             now: now
         )

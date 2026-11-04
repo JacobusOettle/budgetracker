@@ -15,8 +15,8 @@ struct StatementImportView: View {
     @State private var amountTexts: [String: String] = [:]
     @State private var included: Set<String> = []
     @State private var importUnmatched = false
-
-    private var aiReady: Bool { StatementImporter.fromSettings() != nil }
+    @State private var aiReady = false
+    @State private var runTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -39,7 +39,12 @@ struct StatementImportView: View {
                           allowsMultipleSelection: true) { result in
                 handle(result)
             }
-            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+            .onDisappear {
+                // Closing the screen stops the import: nothing more is sent.
+                runTask?.cancel()
+                runTask = nil
+                UIApplication.shared.isIdleTimerDisabled = false
+            }
         }
     }
 
@@ -71,6 +76,7 @@ struct StatementImportView: View {
                 Text("Privacy: the statement goes to the AI provider you chose, including descriptions, amounts, balances and anything else in the file, such as an account number. Remove anything you don't want to share before importing. Keep Tally open while it works. A year of transactions can take a few minutes.")
             }
         }
+        .onAppear { aiReady = StatementImporter.fromSettings() != nil }
     }
 
     // MARK: Stages
@@ -106,6 +112,8 @@ struct StatementImportView: View {
                 }
                 Section {
                     Button("Try again") {
+                        runTask?.cancel()
+                        runTask = nil
                         self.importer = nil
                         UIApplication.shared.isIdleTimerDisabled = false
                     }
@@ -257,7 +265,8 @@ struct StatementImportView: View {
             importUnmatched = false
             self.importer = importer
             UIApplication.shared.isIdleTimerDisabled = true
-            Task { await importer.run(files: files, in: context) }
+            runTask?.cancel()
+            runTask = Task { await importer.run(files: files, in: context) }
         }
     }
 }
