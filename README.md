@@ -81,14 +81,49 @@ Tally can ask an AI model which budget it belongs to.
 - **Privacy:** turning this on means the merchant, amount, time, your budget names and
   your recent history leave the phone for the provider you chose.
 
-## Importing past purchases from Wallet: not possible
+## Importing a bank statement (CSV)
 
-Apple doesn't let apps read Apple Wallet's transaction history for your FNB or Capitec
-cards. Apple's FinanceKit API only covers Apple Card, Apple Cash and Apple Savings, and
-only in countries where Apple offers them, not South Africa. It also needs special
-approval from Apple. The Shortcuts Wallet trigger only fires for new taps. A possible
-alternative is importing a bank statement export (CSV) from FNB or Capitec online
-banking, which AI categorisation could then sort.
+**Settings → Import bank statement**, or **+ → Import bank statement** on the Budgets
+tab. This loads your past spending and lets the AI set up budgets. It needs AI
+categorisation set up.
+
+1. In FNB or Capitec online banking, download your transaction history as **CSV**
+   (not PDF). You can pick several files, for example one per account or per year.
+   The limit is 6 000 rows per file.
+2. Tally sends the CSV to your AI provider in parts of 120 rows, with the header
+   repeated in each part, asking it to **extract the transactions**. For each one it
+   returns the date, a cleaned-up merchant name, the amount, the kind (spend, income,
+   transfer or refund) and a spending category. If a part's answer is cut off or
+   unreadable, the part is split in half and retried. Rate limits and dropped
+   connections are retried with a back-off.
+3. A second request sends a summary of spending per category (totals, monthly
+   averages, top merchants) and asks for **4–10 budgets** with monthly amounts. It
+   reuses the names of budgets you already have.
+4. **You review it.** You see the period, how many spending payments were found and
+   what was skipped. You can edit each budget's monthly amount or switch a budget
+   off. Nothing is saved until you tap **Import**.
+5. **What gets imported:**
+   - **Spending only.** Income, transfers between your own accounts and refunds are
+     skipped.
+   - **Duplicates are handled.** Each payment Tally already has cancels out one
+     statement row on the same day for the same amount, so re-importing is safe.
+     Rows repeated across overlapping files count once, but identical purchases in
+     one statement are all kept.
+   - **Marking and dates.** Imported payments are marked **Imported** and can be
+     reassigned in History, and corrections teach the AI. New budgets start in the
+     month of their first imported payment, so past months add up.
+   - **Month End.** It still only reminds you about months from when you started
+     using Tally.
+   - **Unmatched payments.** Payments that fit no budget are only imported, as
+     Unassigned, if you choose that.
+
+**Privacy:** the whole file goes to your AI provider, including descriptions,
+balances and anything else in it, such as an account number. Keep Tally open while
+it runs. Closing the screen stops it.
+
+Apple Wallet's own history can't be imported. Apple doesn't give apps access to it
+for FNB or Capitec cards. FinanceKit only covers Apple Card, Cash and Savings, isn't
+available in South Africa, and needs Apple's approval.
 
 ## Spike results (4 Nov 2026, iPhone on iOS 26, FNB virtual card)
 
