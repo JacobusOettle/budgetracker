@@ -36,6 +36,10 @@ struct PaymentsListView: View {
     private var budgets: [Budget]
     @State private var editing: Payment?
 
+    init(mode: Mode) {
+        self.mode = mode
+    }
+
     private var filtered: [Payment] {
         switch mode {
         case .all: payments

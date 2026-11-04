@@ -19,6 +19,8 @@ struct BudgetsHomeView: View {
     @State private var monthEnd: MonthTarget?
     @State private var errorMessage: String?
 
+    init() {}
+
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in

@@ -17,6 +17,10 @@ struct MonthEndView: View {
     @State private var didPrefill = false
     @State private var errorMessage: String?
 
+    init(month: Date) {
+        self.month = month
+    }
+
     private var monthName: String { MonthMath.name(month) }
     private var key: String { ReplacementPlanner.monthKey(for: month) }
     private var existing: MonthClose? { closes.first { $0.monthKey == key } }
