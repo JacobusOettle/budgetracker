@@ -31,9 +31,8 @@ struct PaymentsListView: View {
 
     @Environment(\.modelContext) private var context
     @Query(sort: \Payment.date, order: .reverse) private var payments: [Payment]
-    @Query(filter: #Predicate<Budget> { $0.archivedAt == nil },
-           sort: [SortDescriptor(\Budget.sortOrder), SortDescriptor(\Budget.name)])
-    private var budgets: [Budget]
+    @Query(sort: \Budget.sortOrder) private var sortedBudgets: [Budget]
+    private var budgets: [Budget] { sortedBudgets.filter { $0.archivedAt == nil } }
     @State private var editing: Payment?
 
     init(mode: Mode) {
@@ -179,7 +178,7 @@ struct PaymentFormView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: [SortDescriptor(\Budget.sortOrder), SortDescriptor(\Budget.name)]) private var allBudgets: [Budget]
+    @Query(sort: \Budget.sortOrder) private var allBudgets: [Budget]
 
     @State private var amountText: String
     @State private var merchant: String

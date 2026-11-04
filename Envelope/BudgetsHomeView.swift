@@ -4,9 +4,8 @@ import SwiftData
 /// Home: every budget's amount left. Tap one before paying to arm it.
 struct BudgetsHomeView: View {
     @Environment(\.modelContext) private var context
-    @Query(filter: #Predicate<Budget> { $0.archivedAt == nil },
-           sort: [SortDescriptor(\Budget.sortOrder), SortDescriptor(\Budget.name)])
-    private var budgets: [Budget]
+    @Query(sort: \Budget.sortOrder) private var sortedBudgets: [Budget]
+    private var budgets: [Budget] { sortedBudgets.filter { $0.archivedAt == nil } }
     @Query(sort: \Budget.createdAt) private var allBudgets: [Budget]
     @Query(sort: \Payment.date, order: .reverse) private var payments: [Payment]
     @Query private var closes: [MonthClose]
