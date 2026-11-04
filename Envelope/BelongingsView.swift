@@ -49,7 +49,7 @@ struct BelongingsView: View {
                     if trueSavings < 0 {
                         Text("Your savings balance is less than what's set aside for replacements. Update the balance, or some replacement funds aren't really there.")
                     } else {
-                        Text("Tap Total in savings to update it from your banking app. Envelope can't see your bank.")
+                        Text("Tap Total in savings to update it from your banking app. Tally can't see your bank.")
                     }
                 }
 
@@ -128,7 +128,7 @@ struct BelongingsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Envelope can't move money. Do the transfer in your banking app, then confirm here.")
+                Text("Tally can't move money. Do the transfer in your banking app, then confirm here.")
             }
             .alert("Error", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK", role: .cancel) {}

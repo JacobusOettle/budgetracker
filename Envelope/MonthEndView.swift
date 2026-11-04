@@ -90,7 +90,7 @@ struct MonthEndView: View {
                         }
                         .disabled(moved == nil)
                     } footer: {
-                        Text("Envelope can't move money. Transfer it to savings in your banking app first, then confirm here. Your savings balance goes up by this amount, and budgets start fresh with the new month.")
+                        Text("Tally can't move money. Transfer it to savings in your banking app first, then confirm here. Your savings balance goes up by this amount, and budgets start fresh with the new month.")
                     }
                 }
             }

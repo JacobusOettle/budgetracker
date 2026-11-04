@@ -62,6 +62,15 @@ final class Payment {
     /// The amount couldn't be read or wasn't in rand. Check and fix it.
     var needsReview: Bool
     var budget: Budget?
+    /// How it got its budget: see `Assignment`. Default for older rows: "".
+    var assignmentRaw: String = ""
+    /// Why the AI picked this budget (shown to you).
+    var aiReason: String = ""
+    /// The AI has already been asked about this payment.
+    var aiAttempted: Bool = false
+    /// If you corrected the AI: the budget it had picked. Sent back to the AI
+    /// as a correction so it learns.
+    var aiOriginalBudgetName: String = ""
 
     init(
         amountCents: Int,
@@ -85,7 +94,30 @@ final class Payment {
     }
 
     var source: PaymentSource { PaymentSource(rawValue: sourceRaw) ?? .manual }
+
+    var assignment: Assignment {
+        get {
+            if let a = Assignment(rawValue: assignmentRaw), a != .unassigned { return a }
+            return budget == nil ? .unassigned : .manual
+        }
+        set { assignmentRaw = newValue.rawValue }
+    }
     var displayMerchant: String { merchant.isEmpty ? "Payment" : merchant }
+}
+
+/// How a payment got its budget.
+enum Assignment: String, Codable {
+    case unassigned = ""
+    /// You armed the budget before paying.
+    case armed
+    /// You picked it.
+    case manual
+    /// The AI picked it and you haven't checked it yet.
+    case ai
+    /// The AI picked it and you confirmed it.
+    case aiConfirmed
+
+    var isAI: Bool { self == .ai || self == .aiConfirmed }
 }
 
 /// A month you closed on the month-end screen.

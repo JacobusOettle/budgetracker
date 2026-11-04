@@ -27,12 +27,22 @@ struct SettingsView: View {
                     Text("Online purchases, and taps the automation missed, aren't logged automatically. The reminder asks you to add them under History → +.")
                 }
 
+                Section {
+                    NavigationLink {
+                        AISettingsView()
+                    } label: {
+                        LabeledContent("Auto-categorise with AI", value: AIConfig.load().enabled ? "On" : "Off")
+                    }
+                } footer: {
+                    Text("When no budget is armed, an AI model of your choice can pick the budget for you.")
+                }
+
                 Section("Data") {
                     NavigationLink("Export for AI analysis") { ExportView() }
                 }
 
                 Section {
-                    Text("Everything stays on this iPhone. Envelope has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
+                    Text("Everything stays on this iPhone unless you turn on AI categorisation. Tally has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -98,7 +108,7 @@ struct SetupGuideView: View {
     var body: some View {
         List {
             Section {
-                Text("After you pay with Apple Pay, an iPhone Shortcuts automation tells Envelope the amount, shop and card. Envelope logs it to the budget you armed, or as Unassigned. Set it up once.")
+                Text("After you pay with Apple Pay, an iPhone Shortcuts automation tells Tally the amount, shop and card. Tally logs it to the budget you armed, or as Unassigned. Set it up once.")
             }
             Section("1. Create the automation") {
                 step(1, "Open **Shortcuts** and tap **Automation** at the bottom.")
@@ -109,8 +119,8 @@ struct SetupGuideView: View {
                 step(6, "Choose **Run Immediately**, then tap **Next**.")
                 step(7, "Tap **New Blank Automation** (or **Create New Shortcut**).")
             }
-            Section("2. Add Envelope's action") {
-                step(8, "Search **Envelope** at the bottom and tap **Log Payment**.")
+            Section("2. Add Tally's action") {
+                step(8, "Search **Tally** at the bottom and tap **Log Payment**.")
                 step(9, "Tap **Amount**, tap **Shortcut Input** above the keyboard, then tap the blue bubble and choose **Amount**.")
                 step(10, "Do the same for **Merchant**, choosing **Merchant**.")
                 step(11, "Tap **›** on the action. For **Card**, choose **Shortcut Input → Card or Pass**. Leave Raw Input empty.")
@@ -126,7 +136,7 @@ struct SetupGuideView: View {
             } header: {
                 Text("3. Check it")
             } footer: {
-                Text("The test runs inside Envelope. To test the automation itself, make a small real Apple Pay payment: the ▶︎ button in Shortcuts sends no payment details.")
+                Text("The test runs inside Tally. To test the automation itself, make a small real Apple Pay payment: the ▶︎ button in Shortcuts sends no payment details.")
             }
             Section("Good to know") {
                 Text("• Online and in-app purchases don't trigger the automation. Add them by hand.")

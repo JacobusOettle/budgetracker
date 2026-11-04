@@ -26,6 +26,10 @@ struct BudgetsHomeView: View {
                 content(now: timeline.date)
             }
             .navigationTitle("Budgets")
+            .task {
+                // Payments the AI couldn't reach in the background get another try.
+                await AutoCategorizer.categorizePending(in: context)
+            }
             .navigationDestination(item: $viewingBudget) { budget in
                 PaymentsListView(mode: .budget(budget))
                     .navigationTitle(budget.name)
@@ -129,7 +133,7 @@ struct BudgetsHomeView: View {
                         .sensoryFeedback(.impact, trigger: budget.armedAt)
                     }
                 } footer: {
-                    Text("Tap a budget just before you pay. The next payment in the following 10 minutes is logged to it. Envelope can't block or change a payment. Long-press a budget to edit it.")
+                    Text("Tap a budget just before you pay. The next payment in the following 10 minutes is logged to it. Tally can't block or change a payment. Long-press a budget to edit it.")
                 }
             }
         }
@@ -219,10 +223,10 @@ struct BudgetCard: View {
         case .none:
             return "Pay now. The next payment goes to \(budget.name). Tap again to disarm."
         case .low:
-            return "Only \(Money.format(cents: left)) left. If you pay more, the payment still goes through: Envelope can't stop it."
+            return "Only \(Money.format(cents: left)) left. If you pay more, the payment still goes through: Tally can't stop it."
         case .empty:
             let state = left == 0 ? "is empty" : "is \(Money.format(cents: -left)) over budget"
-            return "\(budget.name) \(state). The payment still goes through: Envelope can't stop it."
+            return "\(budget.name) \(state). The payment still goes through: Tally can't stop it."
         }
     }
 }

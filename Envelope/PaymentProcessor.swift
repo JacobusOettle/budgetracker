@@ -77,6 +77,7 @@ enum PaymentProcessor {
                 .filter { $0.id != payment.id && MonthMath.contains(interval, $0.date) }
                 .reduce(0) { $0 + $1.amountCents }
             payment.budget = budget
+            payment.assignment = .armed
             budget.armedAt = nil
             try context.save()
             return .assigned(payment, budget: budget, leftCents: budget.monthlyCents - spentBefore - cents)
@@ -86,6 +87,16 @@ enum PaymentProcessor {
         return .unassigned(payment)
     }
 
+    /// Notification after the AI assigned a payment that wasn't armed.
+    static func autoNotification(payment: Payment, budget: Budget, now: Date = .now) -> (title: String, body: String) {
+        let left = budget.leftCents(now: now)
+        let status = left >= 0
+            ? "\(Money.format(cents: left)) left."
+            : "\(Money.format(cents: -left)) over budget."
+        return ("\(Money.format(cents: payment.amountCents)) → \(budget.name) (auto)",
+                "\(payment.displayMerchant). \(status) Wrong? Change it in Tally.")
+    }
+
     /// The notification to show for an outcome. nil for duplicates.
     static func notification(for outcome: Outcome) -> (title: String, body: String)? {
         switch outcome {
@@ -93,7 +104,7 @@ enum PaymentProcessor {
             return nil
         case let .assigned(payment, budget, left):
             if payment.needsReview {
-                return ("Check payment in \(budget.name)", "\(payment.displayMerchant): \(payment.note) Open Envelope to fix it.")
+                return ("Check payment in \(budget.name)", "\(payment.displayMerchant): \(payment.note) Open Tally to fix it.")
             }
             let status = left >= 0
                 ? "\(Money.format(cents: left)) left in \(budget.name) this month."
@@ -101,9 +112,9 @@ enum PaymentProcessor {
             return ("\(Money.format(cents: payment.amountCents)) → \(budget.name)", "\(payment.displayMerchant). \(status)")
         case let .unassigned(payment):
             if payment.needsReview {
-                return ("Check a payment", "\(payment.displayMerchant): \(payment.note) Open Envelope to fix and assign it.")
+                return ("Check a payment", "\(payment.displayMerchant): \(payment.note) Open Tally to fix and assign it.")
             }
-            return ("Assign \(Money.format(cents: payment.amountCents))", "\(payment.displayMerchant). No budget was armed. Open Envelope to assign it.")
+            return ("Assign \(Money.format(cents: payment.amountCents))", "\(payment.displayMerchant). No budget was armed. Open Tally to assign it.")
         }
     }
 }

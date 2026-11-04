@@ -11,7 +11,7 @@ import Foundation
 struct LogPaymentIntent: AppIntent {
     static var title: LocalizedStringResource = "Log Payment"
     static var description = IntentDescription(
-        "Logs a card payment to the budget you armed in Envelope, or as Unassigned if none is armed. Use it in a Shortcuts Wallet automation: set Amount, Merchant and Card from Shortcut Input."
+        "Logs a card payment to the budget you armed in Tally, or (if AI is set up) to the budget the AI picks, otherwise as Unassigned. Use it in a Shortcuts Wallet automation: set Amount, Merchant and Card from Shortcut Input."
     )
     static var openAppWhenRun: Bool = false
 
@@ -36,14 +36,26 @@ struct LogPaymentIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        let context = Persistence.shared.mainContext
         let outcome = try PaymentProcessor.process(
             amountText: amount,
             merchant: merchant,
             card: card,
             source: .shortcut,
-            in: Persistence.shared.mainContext
+            in: context
         )
-        if let note = PaymentProcessor.notification(for: outcome) {
+        var note = PaymentProcessor.notification(for: outcome)
+
+        // Nothing armed: let the AI try, if you've set it up. It's saved as
+        // Unassigned first, so a slow or failed AI call loses nothing.
+        if case .unassigned(let payment) = outcome, let client = AutoCategorizer.clientFromSettings() {
+            let result = await AutoCategorizer.categorize(payment, client: client, in: context)
+            if case .assigned(let budget, _) = result {
+                note = PaymentProcessor.autoNotification(payment: payment, budget: budget)
+            }
+        }
+
+        if let note {
             await Notifier.post(title: note.title, body: note.body)
         }
         // No dialog: nothing pops up at the till. The notification confirms it.

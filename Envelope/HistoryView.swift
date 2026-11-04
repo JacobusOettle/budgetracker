@@ -34,6 +34,8 @@ struct PaymentsListView: View {
     @Query(sort: \Budget.sortOrder) private var sortedBudgets: [Budget]
     private var budgets: [Budget] { sortedBudgets.filter { $0.archivedAt == nil } }
     @State private var editing: Payment?
+    @State private var sorting = false
+    @State private var sortMessage: String?
 
     init(mode: Mode) {
         self.mode = mode
@@ -77,9 +79,22 @@ struct PaymentsListView: View {
                                        description: Text("Apple Pay payments appear here once the Shortcuts automation is set up. Add online purchases with +."))
             }
             if !attention.isEmpty {
-                Section("To sort out") {
+                Section {
                     ForEach(attention) { row($0) }
                         .onDelete { delete(attention, at: $0) }
+                    if AIConfig.load().enabled, attention.contains(where: { $0.budget == nil }) {
+                        Button {
+                            Task { await autoSort() }
+                        } label: {
+                            Label(sorting ? "Sorting…" : "Auto-sort unassigned with AI", systemImage: "sparkles")
+                        }
+                        .disabled(sorting)
+                    }
+                    if let sortMessage {
+                        Text(sortMessage).font(.footnote).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("To sort out")
                 }
             }
             ForEach(groups(rest)) { group in
@@ -98,6 +113,19 @@ struct PaymentsListView: View {
         .sheet(item: $editing) { PaymentFormView(payment: $0) }
     }
 
+    private func autoSort() async {
+        guard let client = AutoCategorizer.clientFromSettings() else {
+            sortMessage = "Set up an AI provider and API key in Settings first."
+            return
+        }
+        sorting = true
+        let count = await AutoCategorizer.categorizePending(retryAll: true, client: client, in: context)
+        sorting = false
+        sortMessage = count == 0
+            ? "The AI wasn't confident about any of them. Assign them yourself."
+            : "Assigned \(count). They're marked Auto: check them and correct any that are wrong."
+    }
+
     private func row(_ payment: Payment) -> some View {
         Button {
             editing = payment
@@ -106,6 +134,12 @@ struct PaymentsListView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            if payment.assignment == .ai {
+                Button("Looks right", systemImage: "checkmark") {
+                    PaymentAssignment.confirmAI(payment)
+                    try? context.save()
+                }
+            }
             Menu("Assign to") {
                 Button("Unassigned") { assign(payment, to: nil) }
                 ForEach(budgets) { budget in
@@ -120,7 +154,7 @@ struct PaymentsListView: View {
     }
 
     private func assign(_ payment: Payment, to budget: Budget?) {
-        payment.budget = budget
+        PaymentAssignment.assign(payment, to: budget)
         try? context.save()
     }
 
@@ -140,6 +174,11 @@ struct PaymentRow: View {
                 HStack(spacing: 4) {
                     if let budget = payment.budget {
                         Text(budget.name).foregroundStyle(.secondary)
+                        if payment.assignment.isAI {
+                            Label(payment.assignment == .ai ? "Auto" : "Auto ✓", systemImage: "sparkles")
+                                .labelStyle(.titleAndIcon)
+                                .foregroundStyle(.purple)
+                        }
                     } else {
                         Text("Unassigned").foregroundStyle(.orange).bold()
                     }
@@ -187,6 +226,8 @@ struct PaymentFormView: View {
     @State private var note: String
     @State private var confirmingDelete = false
     @State private var errorMessage: String?
+    @State private var suggesting = false
+    @State private var suggestMessage: String?
 
     init(payment: Payment?) {
         self.payment = payment
@@ -218,6 +259,34 @@ struct PaymentFormView: View {
                         ForEach(budgetOptions) { budget in
                             Text(budget.archivedAt == nil ? budget.name : "\(budget.name) (removed)")
                                 .tag(UUID?.some(budget.id))
+                        }
+                    }
+                }
+                if let payment, payment.assignment.isAI, payment.budget?.id == budgetID {
+                    Section {
+                        Label(payment.aiReason.isEmpty ? "Picked by AI." : "Picked by AI: \(payment.aiReason)", systemImage: "sparkles")
+                            .foregroundStyle(.purple)
+                        if payment.assignment == .ai {
+                            Button("Looks right") {
+                                PaymentAssignment.confirmAI(payment)
+                                try? context.save()
+                                dismiss()
+                            }
+                        } else {
+                            Text("You confirmed this.").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } footer: {
+                        Text("Wrong? Pick the right budget above. The AI learns from your corrections.")
+                    }
+                }
+                if budgetID == nil, payment != nil, AIConfig.load().enabled {
+                    Section {
+                        Button(suggesting ? "Asking…" : "Suggest a budget with AI") {
+                            Task { await suggest() }
+                        }
+                        .disabled(suggesting)
+                        if let suggestMessage {
+                            Text(suggestMessage).font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -259,6 +328,26 @@ struct PaymentFormView: View {
         }
     }
 
+    private func suggest() async {
+        guard let payment else { return }
+        guard let client = AutoCategorizer.clientFromSettings() else {
+            suggestMessage = "Set up an AI provider and API key in Settings first."
+            return
+        }
+        suggesting = true
+        let result = await AutoCategorizer.categorize(payment, client: client, in: context)
+        suggesting = false
+        switch result {
+        case .assigned(let budget, _):
+            budgetID = budget.id
+            suggestMessage = nil
+        case .unsure:
+            suggestMessage = "The AI wasn't sure. Pick a budget yourself."
+        case .failed(let message):
+            suggestMessage = "Couldn't reach the AI: \(message)"
+        }
+    }
+
     private func save() {
         guard let cents else { return }
         let budget = allBudgets.first { $0.id == budgetID }
@@ -268,13 +357,14 @@ struct PaymentFormView: View {
                 payment.amountCents = cents
                 payment.merchant = trimmedMerchant
                 payment.date = date
-                payment.budget = budget
+                PaymentAssignment.assign(payment, to: budget)
                 payment.note = note
                 payment.needsReview = false
             } else {
                 let new = Payment(amountCents: cents, merchant: trimmedMerchant, card: "", date: date, source: .manual, note: note)
                 context.insert(new)
                 new.budget = budget
+                new.assignment = budget == nil ? .unassigned : .manual
             }
             try context.save()
             dismiss()

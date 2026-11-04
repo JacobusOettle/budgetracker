@@ -101,7 +101,7 @@ struct BelongingFormView: View {
                         LifespanEditor(months: $previousMonths)
                     }
                 } footer: {
-                    Text("If you have, Envelope expects this one to last as long as the last one did.")
+                    Text("If you have, Tally expects this one to last as long as the last one did.")
                 }
 
                 Section {

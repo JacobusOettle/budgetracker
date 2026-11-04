@@ -1,11 +1,16 @@
-# Envelope
+# Tally
 
-Envelope is an iPhone budgeting app for rand. Tap a budget, such as Food, just
+Tally is an iPhone budgeting app for rand. Tap a budget, such as Food, just
 before you pay with Apple Pay. An iOS Shortcuts **Wallet** automation then tells
-Envelope about the payment, and it's logged to that budget. Envelope never connects
+Tally about the payment, and it's logged to that budget. Tally never connects
 to a bank, has no account or analytics, and all data stays on the phone.
 
-## Using Envelope
+> **About the name.** The app is called **Tally** on your home screen, in Shortcuts and in
+> notifications. Inside the code, the Xcode project, folders and bundle ID
+> (`com.jacobusoettle.envelope`) keep the old working name "Envelope", so your data and
+> your existing Shortcuts automation carry on working after an update.
+
+## Using Tally
 
 **Budgets tab (home)**
 - Each budget shows **what's left this month** in rand. The amount turns orange
@@ -43,9 +48,47 @@ amount, that month's replacement contributions are recorded, and budgets start
 fresh with the new calendar month. Closing a month twice does nothing. A banner on
 the home screen reminds you of any past month you haven't closed.
 
-**Settings:** the Shortcuts setup guide, **Send a test payment** (runs the real
+**Settings:** AI categorisation, the Shortcuts setup guide, **Send a test payment** (runs the real
 payment path with R12.34), the daily **missed-payment reminder** (on by default at
 20:00), and export.
+
+## AI categorisation (optional)
+
+**Settings → Auto-categorise with AI.** When a payment arrives and no budget is armed,
+Tally can ask an AI model which budget it belongs to.
+
+- **Works with any provider.** Presets cover Claude (Anthropic), OpenAI, OpenRouter
+  (any model), Google Gemini and Ollama or LM Studio on your own computer, plus a custom
+  option for anything that speaks the OpenAI `/chat/completions` format. Claude uses
+  the Anthropic Messages API (`anthropic-version: 2026-10-21`). The default model is
+  `claude-opus-5-5`, run at low effort with structured JSON output. You can change the
+  model to anything, for example `claude-haiku-5-5` to keep costs down.
+- **The key is stored in the iPhone Keychain** and only sent to the provider's address
+  you entered. It stays readable while the phone is locked, so background payments can
+  still be sorted.
+- **It learns from your history.** Each request includes your budgets with what's
+  left, up to 80 of your recent payments that *you* sorted (armed, picked or confirmed),
+  and every correction you made to an earlier AI guess. Unchecked AI guesses are not fed
+  back as truth. Card names, savings and belongings are never sent.
+- **It's always visible.** AI-sorted payments show a purple **Auto** badge, with the
+  reason, in History. Tap **Looks right** to confirm (the badge becomes **Auto ✓**), or
+  pick another budget to correct it. The correction is recorded and sent as a lesson
+  next time.
+- **It's safe when unsure.** If the model is below 60% confident, picks nothing, times
+  out or fails, the payment stays Unassigned. It's saved first, so nothing is lost.
+  Payments it couldn't reach are retried when you open the app. "To sort out" also has
+  an **Auto-sort unassigned with AI** button.
+- **Privacy:** turning this on means the merchant, amount, time, your budget names and
+  your recent history leave the phone for the provider you chose.
+
+## Importing past purchases from Wallet: not possible
+
+Apple doesn't let apps read Apple Wallet's transaction history for your FNB or Capitec
+cards. Apple's FinanceKit API only covers Apple Card, Apple Cash and Apple Savings, and
+only in countries where Apple offers them, not South Africa. It also needs special
+approval from Apple. The Shortcuts Wallet trigger only fires for new taps. A possible
+alternative is importing a bank statement export (CSV) from FNB or Capitec online
+banking, which AI categorisation could then sort.
 
 ## Spike results (4 Nov 2026, iPhone on iOS 26, FNB virtual card)
 

@@ -21,7 +21,7 @@ enum DataExport {
     /// Writes the export to a temporary file and returns its URL for sharing.
     static func writeFile(context: ModelContext, now: Date = .now) throws -> URL {
         let data = try makeJSON(context: context, now: now)
-        let name = "envelope-export-\(dayString(now, calendar: .current)).json"
+        let name = "tally-export-\(dayString(now, calendar: .current)).json"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try data.write(to: url, options: .atomic)
         return url
@@ -61,6 +61,9 @@ enum DataExport {
         let source: String
         let note: String?
         let needsReview: Bool
+        let assignedBy: String
+        let aiReason: String?
+        let aiOriginalBudget: String?
     }
 
     struct MonthCloseDTO: Encodable {
@@ -144,12 +147,12 @@ enum DataExport {
     }
 
     static let about: [String: String] = [
-        "purpose": "Export from Envelope, a personal budgeting app for an iPhone user in South Africa. The user arms a budget before paying with Apple Pay; the payment is then logged to it. No bank connection: payments come from Apple Pay via iOS Shortcuts or are entered by hand.",
+        "purpose": "Export from Tally, a personal budgeting app for an iPhone user in South Africa. The user arms a budget before paying with Apple Pay; the payment is then logged to it. No bank connection: payments come from Apple Pay via iOS Shortcuts or are entered by hand.",
         "money": "All *_zar fields are exact decimal strings in South African rand (ZAR), e.g. \"24000.00\". Negative means money out.",
         "dates": "Fields named *_on and *_date are local calendar dates (YYYY-MM-DD). *_at fields are ISO 8601 timestamps.",
         "savings": "total_zar is the user's savings balance as last entered by hand. set_aside_for_replacements_zar is the sum of all belonging funds. true_savings_zar = total_zar - set_aside_for_replacements_zar, the money not earmarked for anything. monthly_set_aside_zar is what the user should move into savings this month for replacements.",
         "budgets": "Monthly spending budgets. left_this_month_zar = monthly_zar - spent_this_month_zar (negative = over budget). removed_on is set if the user removed the budget; its payments are kept.",
-        "payments": "Every card payment, newest first. budget null = Unassigned (not yet given a budget). source: shortcut = logged automatically from Apple Pay via the iOS Shortcuts Wallet automation, manual = typed in by the user (online purchases, missed payments), test = test payment. needs_review = the amount couldn't be read or wasn't in rand.",
+        "payments": "Every card payment, newest first. budget null = Unassigned (not yet given a budget). source: shortcut = logged automatically from Apple Pay via the iOS Shortcuts Wallet automation, manual = typed in by the user (online purchases, missed payments), test = test payment. needs_review = the amount couldn't be read or wasn't in rand. assigned_by: armed = the user armed the budget before paying, manual = the user chose it, ai = an AI model chose it and the user hasn't checked it, aiConfirmed = AI choice confirmed by the user, none = unassigned. ai_original_budget = the AI's wrong guess that the user corrected.",
         "month_closes": "Months the user closed. For each budget: what was left. to_save_zar = max(0, total_left_zar - unassigned_zar), the suggested amount to move to savings. moved_to_savings_zar = what the user said they actually moved. to_replacement_funds_zar = the part of that set aside for belongings; the rest is true savings.",
         "belongings": "Things the user owns and plans to replace. The user saves monthly into a fund per belonging so the replacement is paid for when it wears out.",
         "belongings.current": "The unit owned now. lifespan_source: custom = user's estimate, previous = how long the previous unit actually lasted, typical = built-in rough category average. monthly_contribution_zar = (replacement_target_zar - fund balance) / months_of_contributions_left, rounded up to the cent. plan_status: saving | funded | due (expected date reached but fund short).",
@@ -183,7 +186,7 @@ enum DataExport {
 
         return Document(
             about: about,
-            app: "Envelope",
+            app: "Tally",
             schemaVersion: schemaVersion,
             exportedAt: timestamp(now),
             currency: "ZAR",
@@ -208,7 +211,10 @@ enum DataExport {
                     card: p.card.isEmpty ? nil : p.card,
                     source: p.source.rawValue,
                     note: p.note.isEmpty ? nil : p.note,
-                    needsReview: p.needsReview
+                    needsReview: p.needsReview,
+                    assignedBy: p.assignment == .unassigned ? "none" : p.assignment.rawValue,
+                    aiReason: p.aiReason.isEmpty ? nil : p.aiReason,
+                    aiOriginalBudget: p.aiOriginalBudgetName.isEmpty ? nil : p.aiOriginalBudgetName
                 )
             },
             monthCloses: closes.map { c in

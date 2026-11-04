@@ -37,7 +37,7 @@ enum ReminderScheduler {
 
         let content = UNMutableNotificationContent()
         content.title = "Any payments missing?"
-        content.body = "Add online purchases or anything Envelope didn't catch today."
+        content.body = "Add online purchases or anything Tally didn't catch today."
         content.sound = .default
         let trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
         try? await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
