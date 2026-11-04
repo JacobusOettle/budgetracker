@@ -18,7 +18,7 @@ struct AISettingsView: View {
                 Text("When a payment arrives and no budget is armed, Tally asks the AI which budget it belongs to. It's marked **Auto** so you can check it, and the AI learns from your corrections. If the AI isn't sure, the payment stays Unassigned.")
             }
 
-            Section("Provider") {
+            Section {
                 Picker("Provider", selection: Binding(
                     get: { config.presetID },
                     set: { id in
@@ -52,6 +52,8 @@ struct AISettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
+            } header: {
+                Text("Provider")
             } footer: {
                 Text("The key is stored in this iPhone's Keychain and is only sent to the base URL above. For a model on your own computer, use its local IP address (e.g. http://192.168.1.10:11434/v1) and keep the phone on the same Wi-Fi.")
             }
