@@ -18,6 +18,8 @@ struct LLMRequest {
     var maxTokens: Int = 1024
     /// Claude effort level: "low" for mechanical tasks.
     var effort: String = "low"
+    /// A PDF to attach (Claude only: sent as a document block before the text).
+    var pdfData: Data? = nil
 }
 
 enum LLMError: LocalizedError, Equatable {
@@ -153,11 +155,21 @@ struct HTTPLLMClient: LLMCompleting, LLMJSONCompleting {
         case .anthropic:
             request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
             request.setValue(anthropicVersion, forHTTPHeaderField: "anthropic-version")
+            let content: Any
+            if let pdf = llm.pdfData {
+                content = [
+                    ["type": "document",
+                     "source": ["type": "base64", "media_type": "application/pdf", "data": pdf.base64EncodedString()]],
+                    ["type": "text", "text": llm.user],
+                ]
+            } else {
+                content = llm.user
+            }
             var b: [String: Any] = [
                 "model": model,
                 "max_tokens": llm.maxTokens,
                 "system": llm.system,
-                "messages": [["role": "user", "content": llm.user]],
+                "messages": [["role": "user", "content": content]],
             ]
             if structured {
                 var output: [String: Any] = ["effort": llm.effort]

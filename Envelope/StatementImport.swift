@@ -1,4 +1,5 @@
 import Foundation
+import PDFKit
 import SwiftData
 
 /// Bank statement import: the CSV is sent to your AI provider, which extracts
@@ -11,6 +12,28 @@ enum StatementImport {
     static let rowsPerChunk = 120
     /// Roughly two years of busy card use. Bigger files are refused up front.
     static let maxRows = 6000
+    static let pagesPerChunk = 3
+    static let maxPages = 200
+
+    /// How PDFs reach the model.
+    enum PDFMode: Equatable {
+        /// The pages themselves (Claude reads PDFs, including scanned ones).
+        case native
+        /// Text extracted on the phone (any provider; needs a text-based PDF).
+        case text
+    }
+
+    /// A file picked for import.
+    enum File {
+        case csv(name: String, text: String)
+        case pdf(name: String, document: PDFDocument)
+
+        var name: String {
+            switch self {
+            case .csv(let name, _), .pdf(let name, _): name
+            }
+        }
+    }
 
     // MARK: Types
 
@@ -55,26 +78,49 @@ enum StatementImport {
         let categories: [CategorySummary]
     }
 
+    /// One part of a file sent in one request. For CSV, `rows` are lines. For
+    /// a PDF, each row is one page: its extracted text, or (native mode) just a
+    /// label, with `pages` holding the page indexes to attach.
     struct Chunk: Equatable {
         let fileName: String
         let header: String
         let rows: [String]
         let index: Int
         let count: Int
+        var pdf: PDFDocument? = nil
+        var pages: [Int] = []
 
         var text: String { ([header] + rows).joined(separator: "\n") }
+
+        /// The first or second half, for retrying an answer that was too long.
+        func half(_ first: Bool) -> Chunk {
+            let mid = rows.count / 2
+            let range = first ? 0..<mid : mid..<rows.count
+            var part = Chunk(fileName: fileName, header: header, rows: Array(rows[range]), index: index, count: count)
+            part.pdf = pdf
+            part.pages = pages.count == rows.count ? Array(pages[range]) : []
+            return part
+        }
     }
 
     enum ImportError: LocalizedError, Equatable {
         case empty
         case tooLarge(Int)
         case nothingExtracted
+        case tooManyPages(Int)
+        case locked(String)
+        case scannedPDF(String)
+        case unreadable(String)
 
         var errorDescription: String? {
             switch self {
             case .empty: "The file is empty."
             case .tooLarge(let rows): "The file has \(rows) rows. Import at most \(StatementImport.maxRows) at a time, e.g. one year per file."
-            case .nothingExtracted: "The AI couldn't find any transactions in this file. Check it's a transaction export (CSV), not a summary."
+            case .nothingExtracted: "The AI couldn't find any transactions. Check the file is a statement or transaction history, not a summary."
+            case .tooManyPages(let pages): "The PDF has \(pages) pages. Import at most \(StatementImport.maxPages) pages at a time."
+            case .locked(let name): "\(name) is password protected. Enter its password to import it."
+            case .scannedPDF(let name): "\(name) has no readable text (it may be a scan). Use Claude as your AI provider, which can read scanned pages, or download a CSV instead."
+            case .unreadable(let name): "Couldn't open \(name) as a PDF."
             }
         }
     }
@@ -102,11 +148,71 @@ enum StatementImport {
         return groups.enumerated().map { Chunk(fileName: fileName, header: header, rows: $1, index: $0, count: groups.count) }
     }
 
+    // MARK: PDF
+
+    /// Splits a PDF into parts of `pagesPerChunk` pages. The document must
+    /// already be unlocked if it has a password.
+    static func pdfChunks(fileName: String, document: PDFDocument, mode: PDFMode, pagesPerChunk: Int = pagesPerChunk) throws -> [Chunk] {
+        guard !document.isLocked else { throw ImportError.locked(fileName) }
+        let pageCount = document.pageCount
+        guard pageCount > 0 else { throw ImportError.empty }
+        guard pageCount <= maxPages else { throw ImportError.tooManyPages(pageCount) }
+
+        let rows: [String]
+        let header: String
+        switch mode {
+        case .native:
+            header = "The pages are attached as a PDF."
+            rows = (0..<pageCount).map { "(page \($0 + 1) of \(pageCount))" }
+        case .text:
+            let texts = (0..<pageCount).map { (document.page(at: $0)?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard texts.contains(where: { !$0.isEmpty }) else { throw ImportError.scannedPDF(fileName) }
+            header = "Text extracted from a PDF statement (columns may be out of line):"
+            rows = texts.enumerated().map { "--- Page \($0.offset + 1) of \(pageCount) ---\n\($0.element)" }
+        }
+
+        let size = max(1, pagesPerChunk)
+        let starts = Array(stride(from: 0, to: pageCount, by: size))
+        return starts.enumerated().map { (i: Int, start: Int) -> Chunk in
+            let range = start..<min(start + size, pageCount)
+            var chunk = Chunk(fileName: fileName, header: header, rows: Array(rows[range]), index: i, count: starts.count)
+            if mode == .native {
+                chunk.pdf = document
+                chunk.pages = Array(range)
+            }
+            return chunk
+        }
+    }
+
+    /// A new, unencrypted PDF with just the chunk's pages. Built by copying
+    /// pages, so a password-protected statement unlocked on the phone is sent
+    /// without its password.
+    static func pdfData(for chunk: Chunk) -> Data? {
+        guard let source = chunk.pdf, !chunk.pages.isEmpty else { return nil }
+        let part = PDFDocument()
+        for (n, index) in chunk.pages.enumerated() {
+            guard let page = source.page(at: index)?.copy() as? PDFPage else { continue }
+            part.insert(page, at: n)
+        }
+        guard part.pageCount > 0 else { return nil }
+        return part.dataRepresentation()
+    }
+
+    static func chunks(for file: File, pdfMode: PDFMode) throws -> [Chunk] {
+        switch file {
+        case let .csv(name, text):
+            return try chunks(fileName: name, text: text)
+        case let .pdf(name, document):
+            return try pdfChunks(fileName: name, document: document, mode: pdfMode)
+        }
+    }
+
     // MARK: Extraction
 
     static let extractionSystem = """
-    You extract transactions from a South African bank statement export (CSV) for Tally, a personal budgeting app. Amounts are in rand.
-    Return every real transaction row in the part you are given, in order. Skip headers, opening/closing balance lines and summary rows.
+    You extract transactions from a South African bank statement (a CSV export or a PDF statement) for Tally, a personal budgeting app. Amounts are in rand.
+    Return every real transaction in the part you are given, in order, each exactly once. Skip headers, opening/closing balance lines, running balance columns, summaries, fee and interest tables, and adverts.
+    In a PDF, use the debit/credit columns or signs to tell money out from money in. A transaction that continues onto the next page is only listed once.
     For each transaction:
     - date: YYYY-MM-DD.
     - description: the merchant or payee, cleaned up for a person to read (e.g. "POS PURCHASE WOOLWORTHS MENLYN 4567*1234 12 OCT" becomes "Woolworths Menlyn").
@@ -140,9 +246,20 @@ enum StatementImport {
     ]
 
     static func extractionRequest(_ chunk: Chunk) -> LLMRequest {
+        if chunk.pdf != nil {
+            let pages = chunk.pages.map { String($0 + 1) }.joined(separator: ", ")
+            let user = """
+            Statement file: \(chunk.fileName)
+            The attached PDF holds page(s) \(pages) of the statement. Extract the transactions on these pages.
+            """
+            return LLMRequest(system: extractionSystem, user: user, schema: extractionSchema, maxTokens: 16000, effort: "low", pdfData: pdfData(for: chunk))
+        }
+        let intro = chunk.header.hasPrefix("Text extracted from a PDF")
+            ? "Part \(chunk.index + 1) of \(chunk.count):"
+            : "Part \(chunk.index + 1) of \(chunk.count) (the first line is the CSV header):"
         let user = """
         Statement file: \(chunk.fileName)
-        Part \(chunk.index + 1) of \(chunk.count) (the first line is the CSV header):
+        \(intro)
 
         \(chunk.text)
         """
@@ -486,9 +603,11 @@ final class StatementImporter: ObservableObject {
 
     private let client: LLMJSONCompleting
     private let calendar: Calendar
+    let pdfMode: StatementImport.PDFMode
 
-    init(client: LLMJSONCompleting, calendar: Calendar = .current) {
+    init(client: LLMJSONCompleting, pdfMode: StatementImport.PDFMode = .native, calendar: Calendar = .current) {
         self.client = client
+        self.pdfMode = pdfMode
         self.calendar = calendar
     }
 
@@ -498,16 +617,22 @@ final class StatementImporter: ObservableObject {
         guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty, URL(string: config.baseURL) != nil else { return nil }
         let key = KeychainStore.get(AIConfig.keychainAccount) ?? ""
         if AIPreset.named(config.presetID).needsKey && key.isEmpty { return nil }
-        return StatementImporter(client: HTTPLLMClient(config: config, apiKey: key, timeout: 600, retries: 3))
+        // Claude reads PDFs directly; other providers get the PDF's text.
+        let mode: StatementImport.PDFMode = config.style == .anthropic ? .native : .text
+        return StatementImporter(client: HTTPLLMClient(config: config, apiKey: key, timeout: 600, retries: 3), pdfMode: mode)
     }
 
     /// Extracts transactions from the files, asks for budgets, and builds the
     /// plan for review.
     func run(files: [(name: String, text: String)], in context: ModelContext) async {
+        await run(files: files.map { StatementImport.File.csv(name: $0.name, text: $0.text) }, in: context)
+    }
+
+    func run(files: [StatementImport.File], in context: ModelContext) async {
         do {
             var chunks: [StatementImport.Chunk] = []
             for file in files {
-                chunks += try StatementImport.chunks(fileName: file.name, text: file.text)
+                chunks += try StatementImport.chunks(for: file, pdfMode: pdfMode)
             }
             var transactions: [StatementImport.Transaction] = []
             for (i, chunk) in chunks.enumerated() {
@@ -551,9 +676,8 @@ final class StatementImporter: ObservableObject {
             }
             throw LLMError.emptyResponse
         } catch let error as LLMError where (error == .truncated || error == .emptyResponse) && splitsLeft > 0 && chunk.rows.count > 1 {
-            let mid = chunk.rows.count / 2
-            let first = StatementImport.Chunk(fileName: chunk.fileName, header: chunk.header, rows: Array(chunk.rows[..<mid]), index: chunk.index, count: chunk.count)
-            let second = StatementImport.Chunk(fileName: chunk.fileName, header: chunk.header, rows: Array(chunk.rows[mid...]), index: chunk.index, count: chunk.count)
+            let first = chunk.half(true)
+            let second = chunk.half(false)
             return try await extract(first, splitsLeft: splitsLeft - 1) + extract(second, splitsLeft: splitsLeft - 1)
         }
     }

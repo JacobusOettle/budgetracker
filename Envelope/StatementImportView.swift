@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import PDFKit
 
 /// Import a bank statement (CSV): the AI extracts the transactions and
 /// proposes budgets; you review and edit before anything is saved.
@@ -17,6 +18,10 @@ struct StatementImportView: View {
     @State private var importUnmatched = false
     @State private var aiReady = false
     @State private var runTask: Task<Void, Never>?
+    /// Files waiting to start; a locked PDF here needs its password first.
+    @State private var pendingFiles: [StatementImport.File] = []
+    @State private var lockedName: String?
+    @State private var password = ""
 
     var body: some View {
         NavigationStack {
@@ -34,8 +39,18 @@ struct StatementImportView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
+            .alert("Statement password", isPresented: Binding(get: { lockedName != nil }, set: { if !$0 { lockedName = nil } })) {
+                SecureField("Password", text: $password)
+                Button("Unlock") { unlockPending() }
+                Button("Cancel", role: .cancel) {
+                    pendingFiles = []
+                    password = ""
+                }
+            } message: {
+                Text("\(lockedName ?? "This PDF") is password protected. Banks often use your ID number or a number from the email. It's only used on this phone.")
+            }
             .fileImporter(isPresented: $choosingFile,
-                          allowedContentTypes: [.commaSeparatedText, .plainText, .text],
+                          allowedContentTypes: [.pdf, .commaSeparatedText, .plainText, .text],
                           allowsMultipleSelection: true) { result in
                 handle(result)
             }
@@ -54,18 +69,21 @@ struct StatementImportView: View {
         Form {
             Section {
                 Text("Load your past spending from a bank statement, and let the AI set up budgets for you.")
-                Text("In FNB or Capitec online banking, download your transaction history as a **CSV** file (not PDF). A few months to a year works best. You can pick more than one file.")
+                Text("Use the **PDF statements** your bank emails you or that you download from FNB or Capitec online banking, or a **CSV** transaction export. A few months to a year works best. You can pick more than one file.")
+                    .foregroundStyle(.secondary)
+                Text("Password-protected statements are fine: Tally asks for the password and unlocks the file on your phone. The password is never sent anywhere.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             Section {
-                Text("1. The whole file is sent to your AI provider, which extracts every transaction.\n2. It proposes budgets based on what you usually spend.\n3. You review and edit the budgets. Nothing is saved until you tap Import.")
+                Text("1. The statement is sent to your AI provider, which extracts every transaction. Claude reads PDF pages directly, even scanned ones. Other providers get the text inside the PDF.\n2. It proposes budgets based on what you usually spend.\n3. You review and edit the budgets. Nothing is saved until you tap Import.")
                     .font(.callout)
             } header: {
                 Text("How it works")
             }
             Section {
                 if aiReady {
-                    Button("Choose CSV file…") { choosingFile = true }
+                    Button("Choose statement (PDF or CSV)…") { choosingFile = true }
                 } else {
                     NavigationLink("Set up an AI provider first") { AISettingsView() }
                 }
@@ -73,7 +91,7 @@ struct StatementImportView: View {
                     Text(fileError).foregroundStyle(.red).font(.footnote)
                 }
             } footer: {
-                Text("Privacy: the statement goes to the AI provider you chose, including descriptions, amounts, balances and anything else in the file, such as an account number. Remove anything you don't want to share before importing. Keep Tally open while it works. A year of transactions can take a few minutes.")
+                Text("Privacy: the statement goes to the AI provider you chose, including descriptions, amounts, balances and anything else in it, such as your name, address and account number. Remove anything you don't want to share before importing. Keep Tally open while it works. A year of transactions can take a few minutes.")
             }
         }
         .onAppear { aiReady = StatementImporter.fromSettings() != nil }
@@ -245,7 +263,7 @@ struct StatementImportView: View {
         case .failure(let error):
             fileError = error.localizedDescription
         case .success(let urls):
-            var files: [(name: String, text: String)] = []
+            var files: [StatementImport.File] = []
             for url in urls {
                 let scoped = url.startAccessingSecurityScopedResource()
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -253,21 +271,67 @@ struct StatementImportView: View {
                     fileError = "Couldn't read \(url.lastPathComponent)."
                     return
                 }
-                let text = String(data: data, encoding: .utf8)
-                    ?? String(data: data, encoding: .windowsCP1252)
-                    ?? String(decoding: data, as: UTF8.self)
-                files.append((name: url.lastPathComponent, text: text))
+                let name = url.lastPathComponent
+                if url.pathExtension.lowercased() == "pdf" || data.starts(with: Data("%PDF".utf8)) {
+                    guard let document = PDFDocument(data: data) else {
+                        fileError = StatementImport.ImportError.unreadable(name).localizedDescription
+                        return
+                    }
+                    files.append(.pdf(name: name, document: document))
+                } else {
+                    let text = String(data: data, encoding: .utf8)
+                        ?? String(data: data, encoding: .windowsCP1252)
+                        ?? String(decoding: data, as: UTF8.self)
+                    files.append(.csv(name: name, text: text))
+                }
             }
-            guard !files.isEmpty, let importer = StatementImporter.fromSettings() else { return }
-            drafts = []
-            included = []
-            amountTexts = [:]
-            importUnmatched = false
-            self.importer = importer
-            UIApplication.shared.isIdleTimerDisabled = true
-            runTask?.cancel()
-            runTask = Task { await importer.run(files: files, in: context) }
+            guard !files.isEmpty else { return }
+            pendingFiles = files
+            continuePending()
         }
+    }
+
+    /// Asks for the next locked PDF's password, or starts once all are open.
+    private func continuePending() {
+        for file in pendingFiles {
+            if case let .pdf(name, document) = file, document.isLocked {
+                password = ""
+                lockedName = name
+                return
+            }
+        }
+        start(pendingFiles)
+        pendingFiles = []
+    }
+
+    private func unlockPending() {
+        guard let name = lockedName else { return }
+        let attempt = password
+        password = ""
+        lockedName = nil
+        for file in pendingFiles {
+            if case let .pdf(fileName, document) = file, fileName == name {
+                if !document.unlock(withPassword: attempt) {
+                    fileError = "Wrong password for \(name). Try again."
+                    pendingFiles = []
+                    return
+                }
+            }
+        }
+        // Show the next prompt after this alert has closed.
+        DispatchQueue.main.async { continuePending() }
+    }
+
+    private func start(_ files: [StatementImport.File]) {
+        guard !files.isEmpty, let importer = StatementImporter.fromSettings() else { return }
+        drafts = []
+        included = []
+        amountTexts = [:]
+        importUnmatched = false
+        self.importer = importer
+        UIApplication.shared.isIdleTimerDisabled = true
+        runTask?.cancel()
+        runTask = Task { await importer.run(files: files, in: context) }
     }
 }
 

@@ -81,17 +81,24 @@ Tally can ask an AI model which budget it belongs to.
 - **Privacy:** turning this on means the merchant, amount, time, your budget names and
   your recent history leave the phone for the provider you chose.
 
-## Importing a bank statement (CSV)
+## Importing a bank statement (PDF or CSV)
 
 **Settings → Import bank statement**, or **+ → Import bank statement** on the Budgets
 tab. This loads your past spending and lets the AI set up budgets. It needs AI
 categorisation set up.
 
-1. In FNB or Capitec online banking, download your transaction history as **CSV**
-   (not PDF). You can pick several files, for example one per account or per year.
-   The limit is 6 000 rows per file.
-2. Tally sends the CSV to your AI provider in parts of 120 rows, with the header
-   repeated in each part, asking it to **extract the transactions**. For each one it
+1. Pick your **PDF statements** (emailed or downloaded from FNB or Capitec) and/or
+   **CSV** transaction exports. You can pick several files, for example one per month,
+   account or year. The limits are 200 pages per PDF and 6 000 rows per CSV.
+   - **Password-protected PDFs:** banks usually lock emailed statements. Tally asks
+     for the password and unlocks the file on the phone. Only an unlocked copy of the
+     pages goes to the AI, and the password never leaves the phone.
+   - **With Claude:** the PDF pages themselves are sent, 3 pages per request, as
+     Anthropic `document` blocks. Claude reads layout and scanned pages.
+   - **With other providers:** Tally extracts the PDF's text on the phone and sends
+     that. Scanned, image-only PDFs need Claude, or use a CSV instead.
+   - **CSV files** are sent in parts of 120 rows, with the header repeated in each part.
+2. Each part goes to your AI provider, asking it to **extract the transactions**. For each one it
    returns the date, a cleaned-up merchant name, the amount, the kind (spend, income,
    transfer or refund) and a spending category. If a part's answer is cut off or
    unreadable, the part is split in half and retried. Rate limits and dropped
@@ -117,8 +124,8 @@ categorisation set up.
    - **Unmatched payments.** Payments that fit no budget are only imported, as
      Unassigned, if you choose that.
 
-**Privacy:** the whole file goes to your AI provider, including descriptions,
-balances and anything else in it, such as an account number. Keep Tally open while
+**Privacy:** the whole statement goes to your AI provider, including descriptions,
+balances and anything else in it, such as your name, address and account number. Keep Tally open while
 it runs. Closing the screen stops it.
 
 Apple Wallet's own history can't be imported. Apple doesn't give apps access to it
