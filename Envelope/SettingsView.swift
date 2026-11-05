@@ -231,7 +231,7 @@ struct SetupGuideView: View {
         step(5, "Search **Spaar** and tap **Log Payment**.")
         step(6, "Tap **Amount** → **Shortcut Input** above the keyboard → tap the blue bubble → **Amount**.")
         step(7, "Do the same for the second field: **Merchant** → **Shortcut Input** → bubble → **Merchant** (it must say Merchant, not Amount).")
-        step(8, "Tap the circled **›** at the end of the action: set **Card** (→ **Card or Pass**), leave Raw Input empty, switch **Show When Run** off, then tap **‹** to save.")
+        step(8, "Tap the circled **›** at the end of the action: set **Card** (→ **Card or Pass**), leave Raw Input empty, then tap **‹** to save.")
     }
 
     private func step(_ number: Int, _ text: LocalizedStringKey) -> some View {

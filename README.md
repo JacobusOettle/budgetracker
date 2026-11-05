@@ -276,7 +276,7 @@ On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call i
    4. Do the same for **Merchant**, choosing **Merchant**.
    5. Tap the small **›** arrow on the right of the action to show **Card**. Set it
       the same way, choosing **Card or Pass**. Leave **Raw Input** empty (it's no
-      longer used), and switch **Show When Run** off.
+      longer used). There's no Show When Run switch: Spaar doesn't pop anything up.
 10. Tap **‹** at the top left to save.
 
 Don't test with the ▶︎ play button in Shortcuts. It sends no payment data, so every

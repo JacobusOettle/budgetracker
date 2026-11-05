@@ -31,8 +31,8 @@ struct SetupWalkthroughView: View {
              detail: "Tap the blue **Shortcut Input** bubble and choose **Amount** from the list."),
         Step(image: "SetupStep8", title: "Fill in the merchant",
              detail: "Do the same for the second field: tap **Merchant** → **Shortcut Input** → tap the bubble → **Merchant**. It must say Merchant, not Amount."),
-        Step(image: "SetupStep9", title: "Card, and turn off Show When Run",
-             detail: "Tap the circled **›** at the end of the action. Set **Card** the same way, choosing **Card or Pass**. Leave **Raw Input** empty and switch **Show When Run** off."),
+        Step(image: "SetupStep9", title: "Fill in the card",
+             detail: "Tap the circled **›** at the end of the action. Set **Card** the same way, choosing **Card or Pass**. Leave **Raw Input** empty. There's no Show When Run switch: Spaar doesn't pop anything up."),
         Step(image: "SetupStep10", title: "Save",
              detail: "Tap **‹** at the top left to save. Your next Apple Pay tap appears in Spaar, and the setup screen will say **Working**."),
     ]

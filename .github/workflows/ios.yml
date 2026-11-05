@@ -47,6 +47,31 @@ jobs:
       - name: Build unsigned IPA
         run: ci/build_unsigned_ipa.sh build/out
 
+      - name: Capture Shortcuts screenshots (best effort)
+        continue-on-error: true
+        run: |
+          UDID=$(ci/pick_simulator.sh)
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl ui "$UDID" appearance dark || true
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --batteryState charged || true
+          xcodebuild test \
+            -project Envelope.xcodeproj \
+            -scheme Screenshots \
+            -destination "id=$UDID" \
+            -resultBundlePath build/Screens.xcresult \
+            CODE_SIGNING_ALLOWED=NO | xcpretty || true
+          mkdir -p build/screens
+          xcrun xcresulttool export attachments --path build/Screens.xcresult --output-path build/screens || true
+          ls -la build/screens || true
+
+      - name: Upload Shortcuts screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shortcuts-screenshots
+          path: build/screens
+          if-no-files-found: ignore
+
       - name: Build signed IPA
         if: env.HAS_SIGNING == 'true'
         env:

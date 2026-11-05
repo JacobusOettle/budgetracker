@@ -38,6 +38,17 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope.tests
         GENERATE_INFOPLIST_FILE: YES
+  EnvelopeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [EnvelopeUITests]
+    dependencies:
+      - target: Envelope
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Envelope
 schemes:
   Envelope:
     build:
@@ -46,3 +57,10 @@ schemes:
         EnvelopeTests: [test]
     test:
       targets: [EnvelopeTests]
+  Screenshots:
+    build:
+      targets:
+        Envelope: all
+        EnvelopeUITests: [test]
+    test:
+      targets: [EnvelopeUITests]
