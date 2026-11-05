@@ -124,6 +124,7 @@ struct SetupGuideView: View {
     @Environment(\.openURL) private var openURL
     @Query(sort: \Payment.date, order: .reverse) private var payments: [Payment]
     @State private var showManual = false
+    @State private var showWalkthrough = false
 
     private var lastApplePay: Payment? { payments.first { $0.source == .shortcut } }
 
@@ -172,19 +173,32 @@ struct SetupGuideView: View {
 
                 Section {
                     DisclosureGroup("Set it up by hand instead", isExpanded: $showManual) {
+                        Button("Show me step by step, with pictures") { showWalkthrough = true }
                         manualSteps
                     }
                 }
             } else {
                 Section {
                     Button {
+                        showWalkthrough = true
+                    } label: {
+                        Label("Show me step by step, with pictures", systemImage: "photo.on.rectangle.angled")
+                            .font(.headline)
+                    }
+                    Button {
                         openURL(URL(string: "shortcuts://")!)
                     } label: {
                         Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
                     }
-                    manualSteps
                 } header: {
                     Text("Set up the automation")
+                } footer: {
+                    Text("Ten short steps, each with a picture of the screen and the exact thing to tap.")
+                }
+                Section {
+                    DisclosureGroup("Just the steps, in text", isExpanded: $showManual) {
+                        manualSteps
+                    }
                 }
             }
 
@@ -205,6 +219,7 @@ struct SetupGuideView: View {
             }
         }
         .navigationTitle("Apple Pay logging")
+        .sheet(isPresented: $showWalkthrough) { SetupWalkthroughView() }
     }
 
     @ViewBuilder
@@ -215,8 +230,8 @@ struct SetupGuideView: View {
         step(4, "Choose **Run Immediately**, then **Next**, then **New Blank Automation**.")
         step(5, "Search **Spaar** and tap **Log Payment**.")
         step(6, "Tap **Amount** → **Shortcut Input** above the keyboard → tap the blue bubble → **Amount**.")
-        step(7, "Do the same for **Merchant** (→ **Merchant**) and, under **›**, **Card** (→ **Card or Pass**).")
-        step(8, "Switch **Show When Run** off and save.")
+        step(7, "Do the same for the second field: **Merchant** → **Shortcut Input** → bubble → **Merchant** (it must say Merchant, not Amount).")
+        step(8, "Tap the circled **›** at the end of the action: set **Card** (→ **Card or Pass**), leave Raw Input empty, switch **Show When Run** off, then tap **‹** to save.")
     }
 
     private func step(_ number: Int, _ text: LocalizedStringKey) -> some View {

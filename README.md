@@ -235,7 +235,8 @@ only leaves your phone when you share it.
 ## Setting up the Apple Pay automation
 
 **In the app:** Settings → **Set up Apple Pay logging**, or tap the banner on the
-Budgets tab. It works with **any card from any bank** in Apple Wallet.
+Budgets tab. Tap **Show me step by step, with pictures** for ten short steps, each
+with a drawing of the Shortcuts screen and the exact thing to tap ringed and numbered. It works with **any card from any bank** in Apple Wallet.
 
 iOS doesn't let apps create Shortcuts automations themselves. Other Wallet-logging
 apps (CashJot, WalletPal, Moneko) also make you build it by hand. Spaar makes it as
