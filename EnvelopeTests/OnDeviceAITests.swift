@@ -50,7 +50,9 @@ final class OnDeviceAITests: XCTestCase {
         XCTAssertTrue(config.enabled)
 
         let wasOff = #"{"enabled":false,"presetID":"anthropic","style":"anthropic","baseURL":"https://api.anthropic.com","model":"claude-opus-5-5"}"#
-        XCTAssertTrue(try JSONDecoder().decode(AIConfig.self, from: Data(wasOff.utf8)).enabled, "off was the old default: turned on once")
+        let migrated = try JSONDecoder().decode(AIConfig.self, from: Data(wasOff.utf8))
+        XCTAssertTrue(migrated.enabled, "off was the old default: turned on once")
+        XCTAssertEqual(migrated.categorizer, .appleOnDevice, "but only on-device: payments are never sent to a cloud you hadn't switched on")
 
         var mine = AIConfig()
         mine.enabled = false

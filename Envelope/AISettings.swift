@@ -113,12 +113,17 @@ struct AIConfig: Codable, Equatable {
         baseURL = try c.decodeIfPresent(String.self, forKey: .baseURL) ?? defaults.baseURL
         model = try c.decodeIfPresent(String.self, forKey: .model) ?? defaults.model
         // Saved before Apple Intelligence was the default (auto-categorise
-        // was off by default then): switch to Automatic and turn it on once,
-        // keeping the cloud provider for imports. Your later choices stick.
+        // was off by default then). Keeps the cloud provider for imports;
+        // your later choices stick.
         if let saved = try? c.decodeIfPresent(Categorizer.self, forKey: .categorizer) {
             categorizer = saved
-        } else {
+        } else if enabled {
+            // Was already sorting with the cloud provider: Apple first now.
             categorizer = .automatic
+        } else {
+            // Was off: only turn on the private on-device model, never start
+            // sending payments to a cloud provider you hadn't switched on.
+            categorizer = .appleOnDevice
             enabled = true
         }
         // A build where Apple Intelligence was a "provider": move it over.
