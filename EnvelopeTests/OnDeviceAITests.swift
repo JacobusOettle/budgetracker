@@ -48,6 +48,14 @@ final class OnDeviceAITests: XCTestCase {
         XCTAssertEqual(config.presetID, "openrouter")
         XCTAssertEqual(config.model, "anthropic/claude-opus-5-5")
         XCTAssertTrue(config.enabled)
+
+        let wasOff = #"{"enabled":false,"presetID":"anthropic","style":"anthropic","baseURL":"https://api.anthropic.com","model":"claude-opus-5-5"}"#
+        XCTAssertTrue(try JSONDecoder().decode(AIConfig.self, from: Data(wasOff.utf8)).enabled, "off was the old default: turned on once")
+
+        var mine = AIConfig()
+        mine.enabled = false
+        let saved = try JSONEncoder().encode(mine)
+        XCTAssertFalse(try JSONDecoder().decode(AIConfig.self, from: saved).enabled, "turning it off now sticks")
     }
 
     func testAppleAsAProviderFromYesterdaysBuildIsMovedOver() throws {

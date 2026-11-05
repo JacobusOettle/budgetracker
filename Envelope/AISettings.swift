@@ -112,9 +112,15 @@ struct AIConfig: Codable, Equatable {
         style = (try? c.decodeIfPresent(AIAPIStyle.self, forKey: .style)) ?? defaults.style
         baseURL = try c.decodeIfPresent(String.self, forKey: .baseURL) ?? defaults.baseURL
         model = try c.decodeIfPresent(String.self, forKey: .model) ?? defaults.model
-        // Saved before Apple Intelligence was the default: use it automatically
-        // when available, keeping the cloud provider for imports.
-        categorizer = (try? c.decodeIfPresent(Categorizer.self, forKey: .categorizer)) ?? .automatic
+        // Saved before Apple Intelligence was the default (auto-categorise
+        // was off by default then): switch to Automatic and turn it on once,
+        // keeping the cloud provider for imports. Your later choices stick.
+        if let saved = try? c.decodeIfPresent(Categorizer.self, forKey: .categorizer) {
+            categorizer = saved
+        } else {
+            categorizer = .automatic
+            enabled = true
+        }
         // A build where Apple Intelligence was a "provider": move it over.
         if presetID == "apple" || style == .appleOnDevice {
             categorizer = .appleOnDevice
