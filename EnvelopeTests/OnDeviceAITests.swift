@@ -107,6 +107,14 @@ final class OnDeviceAITests: XCTestCase {
     }
 }
 
+private final class BusyClient: LLMCompleting {
+    var calls = 0
+    func complete(_ prompt: CategorizationPrompt) async throws -> String {
+        calls += 1
+        throw LLMError.temporarilyUnavailable("busy")
+    }
+}
+
 @MainActor
 final class OnDeviceMessagesTests: XCTestCase {
     func testMessageNamesTheRealProblem() {
@@ -126,14 +134,6 @@ final class OnDeviceMessagesTests: XCTestCase {
     }
 
     func testBatchStopsWhenTheModelIsBusy() async throws {
-        struct Busy: LLMCompleting {
-            final class Counter { var calls = 0 }
-            let counter = Counter()
-            func complete(_ prompt: CategorizationPrompt) async throws -> String {
-                counter.calls += 1
-                throw LLMError.temporarilyUnavailable("busy")
-            }
-        }
         let container = try Persistence.inMemory()
         let context = container.mainContext
         _ = try BudgetService.addBudget(name: "Food", monthlyCents: 1, in: context)
@@ -141,9 +141,9 @@ final class OnDeviceMessagesTests: XCTestCase {
             _ = try PaymentProcessor.process(amountText: "R \(i + 1).00", merchant: "Shop \(i)", card: "", source: .shortcut,
                                              now: TestCalendar.date(2026, 10, 1 + i), in: context)
         }
-        let busy = Busy()
+        let busy = BusyClient()
         let assigned = await AutoCategorizer.categorizePending(client: busy, in: context)
         XCTAssertEqual(assigned, 0)
-        XCTAssertEqual(busy.counter.calls, 1, "stops after the first busy answer")
+        XCTAssertEqual(busy.calls, 1, "stops after the first busy answer")
     }
 }
