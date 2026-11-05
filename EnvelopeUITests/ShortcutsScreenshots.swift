@@ -52,14 +52,17 @@ final class ShortcutsScreenshots: XCTestCase {
 
         // 3. Same editor in a normal shortcut: add Spaar's Log Payment
         tapButton("Library")
-        tapButton("Add") || tapButton("New Shortcut")
+        tapButton("Create Shortcut")
         sleep(2)
+        dismissKeyboardTip()
         snap("f-new-shortcut")
         let search = shortcuts.searchFields.firstMatch
         if search.waitForExistence(timeout: 3) {
             search.tap()
+            dismissKeyboardTip()
             search.typeText("Spaar")
             sleep(2)
+            dismissKeyboardTip()
         }
         snap("g-search-spaar")
         tapStatic("Log Payment") || tapButton("Log Payment")
@@ -67,6 +70,7 @@ final class ShortcutsScreenshots: XCTestCase {
         snap("h-log-payment-added")
 
         tapButton("Amount") || tapStatic("Amount")
+        dismissKeyboardTip()
         snap("i-amount-tapped")
         tapButton("Shortcut Input") || tapStatic("Shortcut Input")
         snap("j-shortcut-input-chosen")
@@ -84,6 +88,12 @@ final class ShortcutsScreenshots: XCTestCase {
             let button = springboard.alerts.buttons[label]
             if button.waitForExistence(timeout: 2) { button.tap(); sleep(1) }
         }
+    }
+
+    /// The simulator's first-time "slide to type" tip covers the screen.
+    private func dismissKeyboardTip() {
+        let button = shortcuts.buttons["Continue"]
+        if button.waitForExistence(timeout: 2), button.isHittable { button.tap(); sleep(1) }
     }
 
     private func dismissWelcome() {
