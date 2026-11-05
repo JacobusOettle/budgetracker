@@ -1,4 +1,1 @@
-{
-  "images" : [ { "filename" : "setup-step-3.png", "idiom" : "universal", "scale" : "3x" } ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}
+{"images":[{"filename":"setup-step-3.jpg","idiom":"universal"}],"info":{"author":"xcode","version":1}}

@@ -4,7 +4,7 @@ import UIKit
 
 final class SetupWalkthroughTests: XCTestCase {
     func testEveryStepHasItsPictureInTheApp() {
-        XCTAssertEqual(SetupWalkthroughView.steps.count, 10)
+        XCTAssertEqual(SetupWalkthroughView.steps.count, 13)
         for step in SetupWalkthroughView.steps {
             XCTAssertNotNil(UIImage(named: step.image, in: Bundle(for: PaymentProcessorBundleToken.self), compatibleWith: nil) ?? UIImage(named: step.image),
                             "missing picture \(step.image)")
