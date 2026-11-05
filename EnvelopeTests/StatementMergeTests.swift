@@ -48,7 +48,8 @@ final class StatementMergeTests: XCTestCase {
 
     private func existing() throws -> [StatementImport.ExistingPayment] {
         try context.fetch(FetchDescriptor<Payment>()).map {
-            .init(id: $0.id, date: $0.date, cents: $0.amountCents, merchant: $0.merchant, hasBudget: $0.budget != nil)
+            .init(id: $0.id, date: $0.date, cents: $0.amountCents, merchant: $0.merchant, hasBudget: $0.budget != nil,
+                  fromStatement: $0.statementMatched || $0.source == .statement)
         }
     }
 
@@ -144,10 +145,59 @@ final class StatementMergeTests: XCTestCase {
 
     func testCrypticDescriptionStillMatchesSameAmountSameDay() throws {
         walletPayment("Takealot", 49_900, at: d(2026, 10, 8))
-        let plan = try importPlan([tx(d(2026, 10, 8), "POS 4567*1234 CPT", 49_900, "Shopping")])
+        let plan = try importPlan([tx(d(2026, 10, 8), "POS 4567*1234", 49_900, "Shopping")])
         XCTAssertEqual(plan.exactMerges.count, 1)
-        let farther = try importPlan([tx(d(2026, 10, 10), "POS 4567*1234 CPT", 49_900, "Shopping")])
+        let farther = try importPlan([tx(d(2026, 10, 10), "POS 4567*1234", 49_900, "Shopping")])
         XCTAssertEqual(farther.merges.count, 0, "without a matching name, only within 1 day")
+    }
+
+    func testDifferentNamesSameAmountIsUncertainAndKeptSeparateByDefault() throws {
+        walletPayment("Engen", 10_000, at: d(2026, 10, 2))   // maybe paid with the other card
+        let plan = try importPlan([tx(d(2026, 10, 2), "Spar Hatfield", 10_000)])
+        let merge = try XCTUnwrap(plan.possibleMerges.first)
+        XCTAssertEqual(merge.kind, .uncertain)
+        XCTAssertFalse(merge.mergedByDefault)
+        let defaults = Set(plan.possibleMerges.filter { !$0.mergedByDefault }.map(\.id))
+        try StatementImport.apply(plan, included: allBudgets, importUnmatched: false, rejectedMerges: defaults, now: d(2026, 11, 5), in: context)
+        XCTAssertEqual(try count(), 2)
+    }
+
+    func testCSVAndPDFOfTheSameMonthInOneImportAreNotDoubled() throws {
+        let plan = try importPlan([
+            tx(d(2026, 10, 1), "Woolworths Menlyn", 25_000, file: "october.csv"),
+            tx(d(2026, 10, 1), "Woolworths Menlyn", 25_000, file: "october.csv"),
+            tx(d(2026, 10, 2), "WOOLWORTHS FOOD MENLYN", 25_000, file: "october.pdf"),   // PDF shows the posting date
+            tx(d(2026, 10, 2), "WOOLWORTHS FOOD MENLYN", 25_000, file: "october.pdf"),
+            tx(d(2026, 10, 9), "Engen", 60_000, "Fuel", file: "october.pdf"),           // only in the PDF
+        ])
+        XCTAssertEqual(plan.skippedDuplicates, 2)
+        XCTAssertEqual(plan.payments.count, 3, "two real Woolworths visits plus Engen")
+    }
+
+    func testNextMonthsPurchaseAtTheSameShopIsNotMergedIntoLastMonthsImport() throws {
+        try StatementImport.apply(importPlan([tx(d(2026, 9, 30), "Spar Brooklyn", 20_000, file: "sep.pdf")]),
+                                  included: allBudgets, importUnmatched: false, now: d(2026, 11, 5), in: context)
+        let plan = try importPlan([tx(d(2026, 10, 1), "Spar Brooklyn", 25_000, file: "oct.pdf")])
+        XCTAssertTrue(plan.merges.isEmpty, "an earlier statement's payment only matches the same amount")
+        XCTAssertEqual(plan.payments.count, 1)
+    }
+
+    func testRejectedMatchIsAddedEvenWithoutABudget() throws {
+        walletPayment("Netflix", 19_900, at: d(2026, 10, 5))
+        let plan = try importPlan([tx(d(2026, 10, 5), "NETFLIX.COM", 21_900, "Subscriptions")])   // no budget fits
+        let merge = try XCTUnwrap(plan.possibleMerges.first)
+        let result = try StatementImport.apply(plan, included: allBudgets, importUnmatched: false, rejectedMerges: [merge.id], now: d(2026, 11, 5), in: context)
+        XCTAssertEqual(result.paymentsImported, 1)
+        XCTAssertEqual(try count(), 2)
+    }
+
+    func testBudgetsAreNotBackdatedByMergesThatDontJoinThem() throws {
+        let fun = try BudgetService.addBudget(name: "Fun", monthlyCents: 80_000, now: d(2026, 9, 1), in: context)
+        walletPayment("KFC Wierda Park", 10_070, at: d(2026, 9, 2), budget: fun)
+        let plan = try importPlan([tx(d(2026, 9, 2), "KFC Wierda Park", 10_070, "Eating out")])
+        try StatementImport.apply(plan, included: allBudgets, importUnmatched: false, now: d(2026, 11, 5), in: context)
+        let food = try XCTUnwrap(try BudgetService.activeBudgets(in: context).first { $0.name == "Food" })
+        XCTAssertEqual(food.createdAt, d(2026, 11, 5), "the KFC payment stays in Fun, so Food starts now")
     }
 
     // MARK: Different amounts

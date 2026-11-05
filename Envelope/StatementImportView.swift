@@ -190,7 +190,7 @@ struct StatementImportView: View {
                 } header: {
                     Text("Same payment?")
                 } footer: {
-                    Text("Same shop, about the same day, different amount: usually a fuel pre-authorisation, a tip, or an amount Apple Pay couldn't read. Switched on: they're merged and the bank's amount is used. Switched off: the statement row is added as a separate payment.")
+                    Text("Same shop with a different amount is usually a fuel pre-authorisation, a tip, or an amount Apple Pay couldn't read: merged unless you switch it off. Same amount at a differently named shop may be a payment on another card: kept separate unless you switch it on. Merging keeps your payment and uses the bank's amount.")
                 }
             }
 
@@ -260,6 +260,8 @@ struct StatementImportView: View {
             if drafts.isEmpty {
                 drafts = plan.budgets
                 included = Set(plan.budgets.map(\.id))
+                // Different-looking names: kept separate unless you say otherwise.
+                rejectedMerges = Set(plan.possibleMerges.filter { !$0.mergedByDefault }.map(\.id))
             }
         }
     }

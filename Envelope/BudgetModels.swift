@@ -14,6 +14,8 @@ final class Budget {
     /// When it was armed. It stays armed for `Arming.duration` from then,
     /// or until a payment is logged to it.
     var armedAt: Date?
+    /// Tile colour (a BudgetPalette key). Empty = picked automatically.
+    var colorName: String = ""
 
     @Relationship(deleteRule: .nullify, inverse: \Payment.budget)
     var payments: [Payment] = []

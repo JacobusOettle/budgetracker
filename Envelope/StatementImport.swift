@@ -409,6 +409,10 @@ enum StatementImport {
         let cents: Int
         let merchant: String
         let hasBudget: Bool
+        /// Already on an earlier statement (imported from or matched to one).
+        /// Such payments only match by the strict rule (same amount and shop),
+        /// so a different purchase at the same shop next month isn't merged in.
+        var fromStatement: Bool = false
     }
 
     struct PlannedPayment: Equatable {
@@ -426,8 +430,13 @@ enum StatementImport {
             case exact
             /// Same shop on about the same day but a different amount (fuel
             /// pre-authorisation, tip, or an amount Apple Pay couldn't read).
-            /// Shown for you to confirm; merging takes the statement's amount.
+            /// Shown for you to confirm (merged by default); merging takes the
+            /// statement's amount.
             case possible
+            /// Same amount on about the same day but clearly different shop
+            /// names, e.g. a payment on your other card. Shown for you to
+            /// confirm, kept separate by default.
+            case uncertain
         }
 
         let transaction: Transaction
@@ -438,6 +447,10 @@ enum StatementImport {
         var id: String { existing.id.uuidString }
         /// The existing payment has no budget and the statement suggests one.
         var fillsInBudget: Bool { !existing.hasBudget && budgetKey != nil }
+        /// You decide on the review screen whether this is the same payment.
+        var needsReview: Bool { kind != .exact }
+        /// Merged unless you switch it off.
+        var mergedByDefault: Bool { kind != .uncertain }
     }
 
     struct Plan: Equatable {
@@ -449,7 +462,8 @@ enum StatementImport {
         let summary: SpendingSummary
         /// Income, transfers and refunds: not imported.
         let skippedNotSpending: Int
-        /// The same row repeated in overlapping files.
+        /// The same row repeated in overlapping files (e.g. a CSV and a PDF of
+        /// the same month).
         let skippedDuplicates: Int
 
         func payments(for budget: ProposedBudget) -> [PlannedPayment] {
@@ -458,7 +472,8 @@ enum StatementImport {
 
         var unmatched: [PlannedPayment] { payments.filter { $0.budgetKey == nil } }
         var exactMerges: [PlannedMerge] { merges.filter { $0.kind == .exact } }
-        var possibleMerges: [PlannedMerge] { merges.filter { $0.kind == .possible } }
+        /// Matches for you to confirm on the review screen.
+        var possibleMerges: [PlannedMerge] { merges.filter(\.needsReview) }
     }
 
     /// Builds the import plan:
@@ -489,31 +504,35 @@ enum StatementImport {
                 ?? budgets.first { $0.name.compare(t.category, options: .caseInsensitive) == .orderedSame }?.id
         }
 
-        func rowKey(_ t: Transaction) -> String { "\(dayKey(t.date))|\(t.cents)|\(t.description.lowercased())" }
-
-        // How many times each row may appear: the most it appears in one file.
-        var perFile: [String: [String: Int]] = [:]
-        for t in transactions where t.kind == .spend {
-            perFile[t.fileName, default: [:]][rowKey(t), default: 0] += 1
-        }
-        var allowed: [String: Int] = [:]
-        for counts in perFile.values {
-            for (key, count) in counts { allowed[key] = max(allowed[key] ?? 0, count) }
-        }
-
-        var used: [String: Int] = [:]
-        var rows: [Transaction] = []
+        // Spending only, grouped by file in the order you picked them.
         var notSpending = 0
-        var duplicates = 0
+        var fileOrder: [String] = []
+        var byFile: [String: [Transaction]] = [:]
         for t in transactions {
             guard t.kind == .spend else { notSpending += 1; continue }
-            let key = rowKey(t)
-            used[key, default: 0] += 1
-            if used[key, default: 0] > allowed[key, default: 1] {
-                duplicates += 1
-                continue
+            if byFile[t.fileName] == nil { fileOrder.append(t.fileName) }
+            byFile[t.fileName, default: []].append(t)
+        }
+
+        // Overlapping files (a CSV and a PDF of the same month, or two
+        // exports that overlap): each file's rows are matched against the
+        // rows already kept from earlier files with the same rules as for
+        // payments in Tally, and exact matches are dropped. Rows within one
+        // file are never compared, so two identical coffees are both kept.
+        var rows: [Transaction] = []
+        var duplicates = 0
+        for name in fileOrder {
+            let fileRows = byFile[name] ?? []
+            guard !rows.isEmpty else { rows += fileRows; continue }
+            let kept = rows.map { ExistingPayment(id: UUID(), date: $0.date, cents: $0.cents, merchant: $0.description, hasBudget: false) }
+            let matches = matchExisting(fileRows, kept, calendar: calendar)
+            for (i, t) in fileRows.enumerated() {
+                if let match = matches[i], match.1 == .exact {
+                    duplicates += 1
+                } else {
+                    rows.append(t)
+                }
             }
-            rows.append(t)
         }
 
         let matches = matchExisting(rows, existing, calendar: calendar)
@@ -541,10 +560,12 @@ enum StatementImport {
     /// Bank statements often show the date the bank processed a payment, 1–3
     /// days after the tap, so dates are compared with some slack:
     /// - A: same amount, same shop, within 3 days (closest dates first).
-    /// - B: same amount, within 1 day, even if the descriptions don't look
-    ///   alike (statements can be cryptic).
+    /// - B: same amount, within 1 day, when a description is too cryptic to
+    ///   compare (e.g. "POS 4567*1234 CPT").
     /// - C (possible): same shop within 2 days but a different amount, within
     ///   half to double, or the existing payment's amount was unreadable.
+    /// - D (uncertain): same amount within 1 day, clearly different names.
+    /// Payments already on an earlier statement only match by A.
     /// Returns statement row index → (existing payment index, kind).
     static func matchExisting(_ rows: [Transaction], _ existing: [ExistingPayment], calendar: Calendar = .current) -> [Int: (Int, PlannedMerge.Kind)] {
         guard !rows.isEmpty, !existing.isEmpty else { return [:] }
@@ -600,13 +621,25 @@ enum StatementImport {
             return list
         }
 
+        func named(_ r: Int, _ e: Int) -> Bool { !rowTokens[r].isEmpty && !existingTokens[e].isEmpty }
+
+        // A: same amount, same shop, within 3 days.
         assign(candidates(within: 3) { r, e, sim in rows[r].cents == existing[e].cents && sim >= 0.5 }, as: .exact)
-        assign(candidates(within: 1) { r, e, _ in rows[r].cents == existing[e].cents }, as: .exact)
+        // B: same amount within 1 day where a name is too cryptic to compare.
+        assign(candidates(within: 1) { r, e, sim in
+            rows[r].cents == existing[e].cents && !existing[e].fromStatement && (sim > 0 || !named(r, e))
+        }, as: .exact)
+        // C: same shop, different amount (pre-auth, tip, unreadable amount).
         assign(candidates(within: 2) { r, e, sim in
-            guard sim >= 0.5 else { return false }
+            guard sim >= 0.5, !existing[e].fromStatement else { return false }
             let a = Double(rows[r].cents), b = Double(existing[e].cents)
             return b == 0 || (a >= b * 0.5 && a <= b * 2)
         }, as: .possible)
+        // D: same amount within 1 day but clearly different names (another
+        // card?): you decide, kept separate by default.
+        assign(candidates(within: 1) { r, e, sim in
+            rows[r].cents == existing[e].cents && !existing[e].fromStatement && sim == 0 && named(r, e)
+        }, as: .uncertain)
         return result
     }
 
@@ -664,8 +697,8 @@ enum StatementImport {
     ///   aren't created, and their new payments aren't imported.
     /// - `importUnmatched`: also import payments that fit no budget, as
     ///   Unassigned (they're not sent to the AI again automatically).
-    /// - `rejectedMerges`: possible matches you said are different payments;
-    ///   they're imported as new payments instead.
+    /// - `rejectedMerges`: matches you said are different payments; they're
+    ///   imported as new payments instead (even if no budget fits).
     /// Merged rows never create a payment: the existing one is kept (with its
     /// budget and exact time), marked as confirmed by the statement, given a
     /// budget if it had none, and for a confirmed possible match, given the
@@ -691,8 +724,12 @@ enum StatementImport {
         var order = (active.map(\.sortOrder).max() ?? -1) + 1
 
         for proposal in plan.budgets where included.contains(proposal.id) {
+            // Only rows that will really land in this budget.
             let dates = plan.payments(for: proposal).map(\.transaction.date)
-                + plan.merges.filter { $0.budgetKey == proposal.id }.map(\.transaction.date)
+                + plan.merges.filter { merge in
+                    merge.budgetKey == proposal.id
+                        && (merge.fillsInBudget || (merge.needsReview && rejectedMerges.contains(merge.id)))
+                }.map(\.transaction.date)
             let start = dates.min().map { min(now, MonthMath.startOfMonth($0)) } ?? now
             if let match = active.first(where: { $0.name.compare(proposal.name, options: .caseInsensitive) == .orderedSame }) {
                 budgetByKey[proposal.id] = match
@@ -707,9 +744,11 @@ enum StatementImport {
             }
         }
 
-        func insertNew(_ t: Transaction, budgetKey: String?) {
+        /// `force`: you said this row is a separate payment, so it's added even
+        /// without a budget.
+        func insertNew(_ t: Transaction, budgetKey: String?, force: Bool = false) {
             let budget = budgetKey.flatMap { budgetByKey[$0] }
-            if budget == nil {
+            if budget == nil && !force {
                 // Either no budget fits, or you switched its budget off.
                 guard budgetKey == nil, importUnmatched else { return }
             }
@@ -739,17 +778,17 @@ enum StatementImport {
         let byID = Dictionary(current.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for merge in plan.merges {
             let t = merge.transaction
-            if merge.kind == .possible && rejectedMerges.contains(merge.id) {
-                insertNew(t, budgetKey: merge.budgetKey)
+            if merge.needsReview && rejectedMerges.contains(merge.id) {
+                insertNew(t, budgetKey: merge.budgetKey, force: true)
                 continue
             }
             guard let payment = byID[merge.existing.id] else {
                 // Deleted since the plan was made: add it as a new payment.
-                insertNew(t, budgetKey: merge.budgetKey)
+                insertNew(t, budgetKey: merge.budgetKey, force: true)
                 continue
             }
             payment.statementMatched = true
-            if merge.kind == .possible && payment.amountCents != t.cents {
+            if merge.needsReview && payment.amountCents != t.cents {
                 let was = payment.amountCents
                 payment.amountCents = t.cents
                 payment.needsReview = false
@@ -856,7 +895,12 @@ final class StatementImporter: ObservableObject {
 
             let existing = try context.fetch(FetchDescriptor<Payment>())
                 .filter { $0.source != .test }
-                .map { StatementImport.ExistingPayment(id: $0.id, date: $0.date, cents: $0.amountCents, merchant: $0.merchant, hasBudget: $0.budget != nil) }
+                .map {
+                    StatementImport.ExistingPayment(
+                        id: $0.id, date: $0.date, cents: $0.amountCents, merchant: $0.merchant,
+                        hasBudget: $0.budget != nil, fromStatement: $0.statementMatched || $0.source == .statement
+                    )
+                }
             plan = StatementImport.plan(transactions: transactions, budgets: budgets, existing: existing, calendar: calendar)
             stage = .review
         } catch is CancellationError {

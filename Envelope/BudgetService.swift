@@ -53,6 +53,37 @@ enum BudgetService {
         return armed
     }
 
+    /// Drag and drop: puts `budget` where `target` is.
+    static func move(_ budget: Budget, onto target: Budget, in context: ModelContext) throws {
+        var list = try activeBudgets(in: context)
+        guard let from = list.firstIndex(where: { $0.id == budget.id }),
+              let to = list.firstIndex(where: { $0.id == target.id }),
+              from != to else { return }
+        let item = list.remove(at: from)
+        list.insert(item, at: to)
+        try renumber(list, in: context)
+    }
+
+    /// "Move earlier" (-1) / "Move later" (+1).
+    static func move(_ budget: Budget, by offset: Int, in context: ModelContext) throws {
+        var list = try activeBudgets(in: context)
+        guard let from = list.firstIndex(where: { $0.id == budget.id }) else { return }
+        let to = min(max(0, from + offset), list.count - 1)
+        guard to != from else { return }
+        let item = list.remove(at: from)
+        list.insert(item, at: to)
+        try renumber(list, in: context)
+    }
+
+    private static func renumber(_ list: [Budget], in context: ModelContext) throws {
+        for (index, budget) in list.enumerated() {
+            // Keep each budget's automatic colour when its position changes.
+            if budget.colorName.isEmpty { budget.colorName = BudgetPalette.key(for: budget) }
+            budget.sortOrder = index
+        }
+        try context.save()
+    }
+
     /// Deletes a budget with no payments. One with payments is archived
     /// instead, so history and past months still add up.
     static func remove(_ budget: Budget, now: Date = .now, in context: ModelContext) throws {
