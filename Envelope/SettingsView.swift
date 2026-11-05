@@ -44,7 +44,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Text("Everything stays on this iPhone unless you turn on AI categorisation. Tally has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
+                    Text("Everything stays on this iPhone unless you use a cloud AI provider (Apple Intelligence runs on the phone). Tally has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

@@ -60,6 +60,13 @@ payment path with R12.34), the daily **missed-payment reminder** (on by default 
 **Settings → Auto-categorise with AI.** When a payment arrives and no budget is armed,
 Tally can ask an AI model which budget it belongs to.
 
+- **Apple Intelligence (on device):** the first option on iOS 26 with an Apple
+  Intelligence iPhone (15 Pro or newer, with Apple Intelligence switched on). It needs
+  no key, costs nothing, and nothing leaves the phone. The model is small (about
+  4 096 tokens of context), so it sees your last 25 sorted payments plus your
+  corrections. When the phone is busy, Apple may hold it back in the background; the
+  payment then stays Unassigned and is sorted when you open Tally. Importing bank
+  statements still needs a cloud provider.
 - **Works with any provider.** Presets cover Claude (Anthropic), OpenAI, OpenRouter
   (any model), Google Gemini and Ollama or LM Studio on your own computer, plus a custom
   option for anything that speaks the OpenAI `/chat/completions` format. Claude uses
@@ -311,7 +318,7 @@ or Finder (drag it onto the phone).
 
 ## CI
 
-`.github/workflows/ios.yml` runs on every push, on a `macos-15` runner:
+`.github/workflows/ios.yml` runs on every push, on a `macos-26` runner (Xcode 26, needed for Apple Intelligence):
 1. Generates `Envelope.xcodeproj` from `project.yml` with XcodeGen. The project
    file isn't committed.
 2. Runs the unit tests on an iPhone simulator.

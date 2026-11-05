@@ -28,11 +28,23 @@ struct AISettingsView: View {
                 )) {
                     ForEach(AIPreset.all) { Text($0.name).tag($0.id) }
                 }
-                if config.presetID == "custom" {
-                    Picker("API format", selection: $config.style) {
-                        ForEach(AIAPIStyle.allCases) { Text($0.displayName).tag($0) }
+                if config.isOnDevice {
+                    if let reason = OnDeviceAI.unavailableReason {
+                        Label(reason, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.subheadline)
+                    } else {
+                        Label("Ready. Runs on this iPhone: no key, no cost, nothing sent anywhere.", systemImage: "checkmark.shield.fill")
+                            .foregroundStyle(.green)
+                            .font(.subheadline)
                     }
                 }
+                if config.presetID == "custom" {
+                    Picker("API format", selection: $config.style) {
+                        ForEach(AIAPIStyle.httpStyles) { Text($0.displayName).tag($0) }
+                    }
+                }
+                if !config.isOnDevice {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Base URL").font(.caption).foregroundStyle(.secondary)
                     TextField("https://…", text: $config.baseURL)
@@ -52,26 +64,37 @@ struct AISettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
+                }
             } header: {
                 Text("Provider")
             } footer: {
+                if config.isOnDevice {
+                    Text("Apple's on-device model is small, so it sees your last 25 sorted payments plus your corrections. If the phone is busy when a payment arrives in the background, Apple may hold the model back: the payment stays Unassigned and is sorted when you open Tally. Importing bank statements needs a cloud provider such as Claude.")
+                } else {
                 Text("The key is stored in this iPhone's Keychain and is only sent to the base URL above. For a model on your own computer, use its local IP address (e.g. http://192.168.1.10:11434/v1) and keep the phone on the same Wi-Fi.")
+                }
             }
 
             Section {
                 Button(testing ? "Testing…" : "Test with a sample payment") {
                     Task { await test() }
                 }
-                .disabled(testing || config.model.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(testing || (!config.isOnDevice && config.model.trimmingCharacters(in: .whitespaces).isEmpty))
                 if let testResult {
                     Text(testResult).font(.footnote)
                 }
             }
 
             Section("What gets sent") {
+                if config.isOnDevice {
+                    Text("Nothing. Apple Intelligence runs on this iPhone, so your payments never leave it.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
                 Text("For each payment the AI sorts: the merchant name, amount and time; your budget names with what's left in them; and up to 80 of your recent payments (merchant, amount, date and budget) plus your corrections. Card names, savings and belongings are never sent. Your provider's own privacy terms apply.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("AI categorisation")
@@ -84,7 +107,16 @@ struct AISettingsView: View {
     private func test() async {
         testing = true
         defer { testing = false }
-        let client = HTTPLLMClient(config: config, apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
+        let client: LLMCompleting
+        if config.isOnDevice {
+            guard let onDevice = OnDeviceAI.makeClient() else {
+                testResult = "❌ \(OnDeviceAI.unavailableReason ?? "Apple Intelligence isn't available.")"
+                return
+            }
+            client = onDevice
+        } else {
+            client = HTTPLLMClient(config: config, apiKey: apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
         let budgets = ["Food", "Fuel", "Fun", "Home"]
         let prompt = CategorizationPrompt(
             system: AutoCategorizer.systemPrompt,

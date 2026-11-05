@@ -29,6 +29,9 @@ enum LLMError: LocalizedError, Equatable {
     case emptyResponse
     /// The answer hit the output limit and was cut off.
     case truncated
+    /// Busy or not ready right now (e.g. Apple Intelligence throttled in the
+    /// background). Worth trying again later.
+    case temporarilyUnavailable(String)
 
     var errorDescription: String? {
         switch self {
@@ -37,12 +40,19 @@ enum LLMError: LocalizedError, Equatable {
         case .refused: "The model declined to answer."
         case .emptyResponse: "The AI provider returned no text."
         case .truncated: "The AI's answer was cut off because it was too long."
+        case .temporarilyUnavailable(let why): "The AI isn't available right now (\(why)). Tally will try again later."
         }
     }
 }
 
 protocol LLMCompleting {
     func complete(_ prompt: CategorizationPrompt) async throws -> String
+    /// How many past payments fit in the prompt for this model.
+    var maxHistory: Int { get }
+}
+
+extension LLMCompleting {
+    var maxHistory: Int { 80 }
 }
 
 protocol LLMJSONCompleting {
@@ -131,6 +141,7 @@ struct HTTPLLMClient: LLMCompleting, LLMJSONCompleting {
         switch config.style {
         case .anthropic: path = base.hasSuffix("/v1") ? "/messages" : "/v1/messages"
         case .openAICompatible: path = "/chat/completions"
+        case .appleOnDevice: throw LLMError.badURL   // not an HTTP provider
         }
         guard let url = URL(string: base + path), url.scheme == "https" || url.scheme == "http" else {
             throw LLMError.badURL
@@ -179,6 +190,8 @@ struct HTTPLLMClient: LLMCompleting, LLMJSONCompleting {
                 b["output_config"] = output
             }
             body = b
+        case .appleOnDevice:
+            throw LLMError.badURL   // not an HTTP provider
         case .openAICompatible:
             if !apiKey.isEmpty { request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
             body = [
@@ -219,6 +232,8 @@ struct HTTPLLMClient: LLMCompleting, LLMJSONCompleting {
             let text = blocks.filter { $0["type"] as? String == "text" }.compactMap { $0["text"] as? String }.joined()
             guard !text.isEmpty else { throw LLMError.emptyResponse }
             return text
+        case .appleOnDevice:
+            throw LLMError.emptyResponse
         case .openAICompatible:
             let choices = json["choices"] as? [[String: Any]] ?? []
             if choices.first?["finish_reason"] as? String == "length" { throw LLMError.truncated }

@@ -27,6 +27,7 @@ enum AutoCategorizer {
     static func clientFromSettings() -> LLMCompleting? {
         let config = AIConfig.load()
         guard config.isUsable else { return nil }
+        if config.isOnDevice { return OnDeviceAI.makeClient() }
         let key = KeychainStore.get(AIConfig.keychainAccount) ?? ""
         if AIPreset.named(config.presetID).needsKey && key.isEmpty { return nil }
         return HTTPLLMClient(config: config, apiKey: key)
@@ -47,6 +48,7 @@ enum AutoCategorizer {
         payment: Payment,
         budgets: [Budget],
         history: [Payment],
+        historyLimit: Int = AutoCategorizer.historyLimit,
         now: Date = .now,
         calendar: Calendar = .current
     ) -> CategorizationPrompt {
@@ -60,7 +62,7 @@ enum AutoCategorizer {
         if !corrections.isEmpty {
             lines.append("")
             lines.append("Corrections (the AI guessed wrong, the person chose):")
-            for p in corrections.prefix(20) {
+            for p in corrections.prefix(min(20, historyLimit)) {
                 lines.append("- \(p.displayMerchant): AI said \(p.aiOriginalBudgetName), correct is \(p.budget?.name ?? "")")
             }
         }
@@ -69,7 +71,7 @@ enum AutoCategorizer {
         if !trusted.isEmpty {
             lines.append("")
             lines.append("Recent payments sorted by the person (date | merchant | amount | budget):")
-            for p in trusted.prefix(historyLimit) {
+            for p in trusted.prefix(max(0, historyLimit)) {
                 lines.append("- \(DataExport.dayString(p.date, calendar: calendar)) | \(p.displayMerchant) | \(Money.plain(cents: p.amountCents)) | \(p.budget?.name ?? "")")
             }
         }
@@ -136,12 +138,14 @@ enum AutoCategorizer {
         }
         guard !budgets.isEmpty else { return .unsure }
 
-        let prompt = buildPrompt(payment: payment, budgets: budgets, history: history, now: now, calendar: calendar)
+        let prompt = buildPrompt(payment: payment, budgets: budgets, history: history, historyLimit: client.maxHistory, now: now, calendar: calendar)
         payment.aiAttempted = true
         let text: String
         do {
             text = try await client.complete(prompt)
         } catch {
+            // Busy, throttled or offline: try again next time the app opens.
+            if isTransient(error) { payment.aiAttempted = false }
             try? context.save()
             return .failed(error.localizedDescription)
         }
@@ -161,6 +165,18 @@ enum AutoCategorizer {
         payment.aiReason = suggestion.reason
         try? context.save()
         return .assigned(budget, suggestion)
+    }
+
+    static func isTransient(_ error: Error) -> Bool {
+        if let error = error as? LLMError {
+            switch error {
+            case .temporarilyUnavailable: return true
+            case .http(let status, _): return HTTPLLMClient.isRetryable(status: status)
+            default: return false
+            }
+        }
+        if let error = error as? URLError { return HTTPLLMClient.isRetryable(error) }
+        return false
     }
 
     /// Tries every unassigned payment not yet sent to the AI (or all

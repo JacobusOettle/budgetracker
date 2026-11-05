@@ -8,14 +8,21 @@ enum AIAPIStyle: String, Codable, CaseIterable, Identifiable {
     /// OpenAI-style /chat/completions. Used by OpenAI, OpenRouter, Google
     /// Gemini's compatible endpoint, Groq, Mistral, Ollama, LM Studio and most others.
     case openAICompatible
+    /// Apple's on-device model (Apple Intelligence, iOS 26+). No key, no
+    /// network: nothing leaves the phone.
+    case appleOnDevice
 
     var id: String { rawValue }
     var displayName: String {
         switch self {
         case .anthropic: "Anthropic (Claude)"
         case .openAICompatible: "OpenAI-compatible"
+        case .appleOnDevice: "Apple Intelligence (on device)"
         }
     }
+
+    /// Formats you can pick for a custom provider.
+    static let httpStyles: [AIAPIStyle] = [.anthropic, .openAICompatible]
 }
 
 struct AIPreset: Identifiable, Equatable {
@@ -28,6 +35,8 @@ struct AIPreset: Identifiable, Equatable {
     let needsKey: Bool
 
     static let all: [AIPreset] = [
+        AIPreset(id: "apple", name: "Apple Intelligence (on this iPhone)", style: .appleOnDevice,
+                 baseURL: "", model: "", modelHint: "", needsKey: false),
         AIPreset(id: "anthropic", name: "Claude (Anthropic)", style: .anthropic,
                  baseURL: "https://api.anthropic.com", model: "claude-opus-5-5",
                  modelHint: "e.g. claude-opus-5-5, or claude-haiku-5-5 for cheaper", needsKey: true),
@@ -47,7 +56,7 @@ struct AIPreset: Identifiable, Equatable {
                  baseURL: "", model: "", modelHint: "Model name", needsKey: false),
     ]
 
-    static func named(_ id: String) -> AIPreset { all.first { $0.id == id } ?? all[0] }
+    static func named(_ id: String) -> AIPreset { all.first { $0.id == id } ?? all[1] }
 }
 
 /// Non-secret AI settings, stored in UserDefaults. The API key is in the Keychain.
@@ -78,8 +87,12 @@ struct AIConfig: Codable, Equatable {
         model = preset.model
     }
 
+    var isOnDevice: Bool { style == .appleOnDevice }
+
     var isUsable: Bool {
-        enabled && !model.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseURL) != nil
+        guard enabled else { return false }
+        if isOnDevice { return true }
+        return !model.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseURL) != nil
     }
 }
 

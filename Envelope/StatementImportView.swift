@@ -86,6 +86,10 @@ struct StatementImportView: View {
             Section {
                 if aiReady {
                     Button("Choose statement (PDF or CSV)…") { choosingFile = true }
+                } else if AIConfig.load().isOnDevice {
+                    Text("Importing statements needs a cloud AI provider such as Claude: Apple's on-device model is too small to read whole statements. Switch provider for the import, then switch back if you like.")
+                        .font(.footnote)
+                    NavigationLink("Choose a cloud provider") { AISettingsView() }
                 } else {
                     NavigationLink("Set up an AI provider first") { AISettingsView() }
                 }
