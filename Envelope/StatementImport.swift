@@ -519,13 +519,21 @@ enum StatementImport {
         // rows already kept from earlier files with the same rules as for
         // payments in Tally, and exact matches are dropped. Rows within one
         // file are never compared, so two identical coffees are both kept.
+        // Only the strict rules apply here (same amount and shop within 3
+        // days, or same amount on the same day when a name is cryptic), and
+        // only where the files' dates overlap, so two different accounts'
+        // purchases of the same amount on nearby days are both kept.
         var rows: [Transaction] = []
         var duplicates = 0
         for name in fileOrder {
             let fileRows = byFile[name] ?? []
-            guard !rows.isEmpty else { rows += fileRows; continue }
+            guard let fileStart = fileRows.map(\.date).min(), let fileEnd = fileRows.map(\.date).max(),
+                  let keptStart = rows.map(\.date).min(), let keptEnd = rows.map(\.date).max(),
+                  fileStart <= keptEnd.addingTimeInterval(3 * 86_400),
+                  fileEnd >= keptStart.addingTimeInterval(-3 * 86_400)
+            else { rows += fileRows; continue }
             let kept = rows.map { ExistingPayment(id: UUID(), date: $0.date, cents: $0.cents, merchant: $0.description, hasBudget: false) }
-            let matches = matchExisting(fileRows, kept, calendar: calendar)
+            let matches = matchExisting(fileRows, kept, strictOnly: true, calendar: calendar)
             for (i, t) in fileRows.enumerated() {
                 if let match = matches[i], match.1 == .exact {
                     duplicates += 1
@@ -561,13 +569,16 @@ enum StatementImport {
     /// days after the tap, so dates are compared with some slack:
     /// - A: same amount, same shop, within 3 days (closest dates first).
     /// - B: same amount, within 1 day, when a description is too cryptic to
-    ///   compare (e.g. "POS 4567*1234 CPT").
+    ///   compare (e.g. "POS 4567*1234 CPT") or the names share a word.
     /// - C (possible): same shop within 2 days but a different amount, within
     ///   half to double, or the existing payment's amount was unreadable.
     /// - D (uncertain): same amount within 1 day, clearly different names.
-    /// Payments already on an earlier statement only match by A.
+    /// Payments already on an earlier statement only match by A or B (never
+    /// by a changed amount or a different name).
     /// Returns statement row index → (existing payment index, kind).
-    static func matchExisting(_ rows: [Transaction], _ existing: [ExistingPayment], calendar: Calendar = .current) -> [Int: (Int, PlannedMerge.Kind)] {
+    /// `strictOnly` (used between files of one import): only A, and B on the
+    /// same day.
+    static func matchExisting(_ rows: [Transaction], _ existing: [ExistingPayment], strictOnly: Bool = false, calendar: Calendar = .current) -> [Int: (Int, PlannedMerge.Kind)] {
         guard !rows.isEmpty, !existing.isEmpty else { return [:] }
 
         func dayNumber(_ date: Date) -> Int {
@@ -621,14 +632,22 @@ enum StatementImport {
             return list
         }
 
-        func named(_ r: Int, _ e: Int) -> Bool { !rowTokens[r].isEmpty && !existingTokens[e].isEmpty }
+        // A name is comparable when it has a real word (4+ letters); short
+        // codes like "CPT" or "JHB" on their own don't count.
+        func informative(_ tokens: Set<String>) -> Bool { tokens.contains { $0.count >= 4 } }
+        let rowNamed = rowTokens.map(informative)
+        let existingNamed = existingTokens.map(informative)
+        func named(_ r: Int, _ e: Int) -> Bool { rowNamed[r] && existingNamed[e] }
 
         // A: same amount, same shop, within 3 days.
         assign(candidates(within: 3) { r, e, sim in rows[r].cents == existing[e].cents && sim >= 0.5 }, as: .exact)
         // B: same amount within 1 day where a name is too cryptic to compare.
-        assign(candidates(within: 1) { r, e, sim in
-            rows[r].cents == existing[e].cents && !existing[e].fromStatement && (sim > 0 || !named(r, e))
+        // Also for payments from an earlier statement: the 1-day window keeps
+        // next month's purchase out, and re-imports must still merge.
+        assign(candidates(within: strictOnly ? 0 : 1) { r, e, sim in
+            rows[r].cents == existing[e].cents && (sim > 0 || !named(r, e))
         }, as: .exact)
+        guard !strictOnly else { return result }
         // C: same shop, different amount (pre-auth, tip, unreadable amount).
         assign(candidates(within: 2) { r, e, sim in
             guard sim >= 0.5, !existing[e].fromStatement else { return false }

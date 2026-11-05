@@ -145,10 +145,40 @@ final class StatementMergeTests: XCTestCase {
 
     func testCrypticDescriptionStillMatchesSameAmountSameDay() throws {
         walletPayment("Takealot", 49_900, at: d(2026, 10, 8))
-        let plan = try importPlan([tx(d(2026, 10, 8), "POS 4567*1234", 49_900, "Shopping")])
-        XCTAssertEqual(plan.exactMerges.count, 1)
-        let farther = try importPlan([tx(d(2026, 10, 10), "POS 4567*1234", 49_900, "Shopping")])
+        let plan = try importPlan([tx(d(2026, 10, 8), "POS 4567*1234 CPT", 49_900, "Shopping")])
+        XCTAssertEqual(plan.exactMerges.count, 1, "a short city code isn't a shop name")
+        let farther = try importPlan([tx(d(2026, 10, 10), "POS 4567*1234 CPT", 49_900, "Shopping")])
         XCTAssertEqual(farther.merges.count, 0, "without a matching name, only within 1 day")
+    }
+
+    func testReimportingCrypticRowsStillMerges() throws {
+        let rows = [tx(d(2026, 10, 8), "POS 4567*1234", 49_900, "Shopping")]
+        try StatementImport.apply(importPlan(rows), included: allBudgets, importUnmatched: true, now: d(2026, 11, 5), in: context)
+        XCTAssertEqual(try count(), 1)
+        let again = try importPlan(rows)
+        XCTAssertEqual(again.exactMerges.count, 1)
+        XCTAssertTrue(again.payments.isEmpty)
+    }
+
+    func testReimportAfterACrypticMergeAddsNothing() throws {
+        walletPayment("", 49_900, at: d(2026, 10, 8))   // Apple Pay sent no merchant
+        let rows = [tx(d(2026, 10, 8), "POS 4567*1234 CPT", 49_900, "Shopping")]
+        try StatementImport.apply(importPlan(rows), included: allBudgets, importUnmatched: false, now: d(2026, 11, 5), in: context)
+        XCTAssertEqual(try count(), 1)
+        let again = try importPlan(rows)
+        XCTAssertTrue(again.payments.isEmpty)
+        XCTAssertEqual(again.merges.count, 1)
+    }
+
+    func testTwoAccountsSameAmountOnNearbyDaysAreBothKept() throws {
+        let plan = try importPlan([
+            tx(d(2026, 10, 2), "Spar Hatfield", 10_000, file: "fnb.pdf"),
+            tx(d(2026, 10, 3), "Engen Lynnwood", 10_000, "Fuel", file: "capitec.pdf"),
+            tx(d(2026, 10, 3), "POS 9999", 5_000, file: "capitec.pdf"),
+            tx(d(2026, 10, 4), "POS 1111", 5_000, file: "fnb.pdf"),
+        ])
+        XCTAssertEqual(plan.skippedDuplicates, 0)
+        XCTAssertEqual(plan.payments.count, 4)
     }
 
     func testDifferentNamesSameAmountIsUncertainAndKeptSeparateByDefault() throws {
