@@ -35,8 +35,6 @@ struct AIPreset: Identifiable, Equatable {
     let needsKey: Bool
 
     static let all: [AIPreset] = [
-        AIPreset(id: "apple", name: "Apple Intelligence (on this iPhone)", style: .appleOnDevice,
-                 baseURL: "", model: "", modelHint: "", needsKey: false),
         AIPreset(id: "anthropic", name: "Claude (Anthropic)", style: .anthropic,
                  baseURL: "https://api.anthropic.com", model: "claude-opus-5-5",
                  modelHint: "e.g. claude-opus-5-5, or claude-haiku-5-5 for cheaper", needsKey: true),
@@ -56,12 +54,41 @@ struct AIPreset: Identifiable, Equatable {
                  baseURL: "", model: "", modelHint: "Model name", needsKey: false),
     ]
 
-    static func named(_ id: String) -> AIPreset { all.first { $0.id == id } ?? all[1] }
+    static func named(_ id: String) -> AIPreset { all.first { $0.id == id } ?? all[0] }
 }
 
 /// Non-secret AI settings, stored in UserDefaults. The API key is in the Keychain.
+/// Which model sorts unarmed payments into budgets.
+enum Categorizer: String, Codable, CaseIterable, Identifiable {
+    /// Apple Intelligence when this iPhone supports it, otherwise the cloud
+    /// provider. The default.
+    case automatic
+    case appleOnDevice
+    case cloud
+
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .automatic: "Automatic"
+        case .appleOnDevice: "Apple Intelligence"
+        case .cloud: "Cloud provider"
+        }
+    }
+}
+
+/// AI settings, stored in UserDefaults (the API key is in the Keychain).
+/// - Categorising payments: `enabled` + `categorizer`. By default Apple
+///   Intelligence is used when available (no key needed, nothing leaves the
+///   phone), else the cloud provider.
+/// - The cloud provider (`presetID`, `style`, `baseURL`, `model`) is used for
+///   statement imports, and for categorising when Apple Intelligence isn't
+///   used.
 struct AIConfig: Codable, Equatable {
-    var enabled = false
+    /// Auto-categorise unarmed payments. On by default: with Apple
+    /// Intelligence it works with no setup; without it, nothing happens until
+    /// a cloud provider is set up.
+    var enabled = true
+    var categorizer: Categorizer = .automatic
     var presetID = "anthropic"
     var style: AIAPIStyle = .anthropic
     var baseURL = "https://api.anthropic.com"
@@ -69,6 +96,35 @@ struct AIConfig: Codable, Equatable {
 
     static let defaultsKey = "ai.config"
     static let keychainAccount = "ai.apiKey"
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled, categorizer, presetID, style, baseURL, model
+    }
+
+    /// Reads settings saved by any earlier version.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = AIConfig()
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? defaults.enabled
+        presetID = try c.decodeIfPresent(String.self, forKey: .presetID) ?? defaults.presetID
+        style = (try? c.decodeIfPresent(AIAPIStyle.self, forKey: .style)) ?? defaults.style
+        baseURL = try c.decodeIfPresent(String.self, forKey: .baseURL) ?? defaults.baseURL
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? defaults.model
+        // Saved before Apple Intelligence was the default: use it automatically
+        // when available, keeping the cloud provider for imports.
+        categorizer = (try? c.decodeIfPresent(Categorizer.self, forKey: .categorizer)) ?? .automatic
+        // A build where Apple Intelligence was a "provider": move it over.
+        if presetID == "apple" || style == .appleOnDevice {
+            categorizer = .appleOnDevice
+            let claude = AIPreset.named("anthropic")
+            presetID = claude.id
+            style = claude.style
+            baseURL = claude.baseURL
+            model = claude.model
+        }
+    }
 
     static func load(_ defaults: UserDefaults = .standard) -> AIConfig {
         guard let data = defaults.data(forKey: defaultsKey),
@@ -87,13 +143,30 @@ struct AIConfig: Codable, Equatable {
         model = preset.model
     }
 
-    var isOnDevice: Bool { style == .appleOnDevice }
-
-    var isUsable: Bool {
-        guard enabled else { return false }
-        if isOnDevice { return true }
-        return !model.trimmingCharacters(in: .whitespaces).isEmpty && URL(string: baseURL) != nil
+    /// What actually sorts payments, given whether Apple Intelligence is ready.
+    func resolvedCategorizer(appleAvailable: Bool) -> Categorizer {
+        switch categorizer {
+        case .automatic: appleAvailable ? .appleOnDevice : .cloud
+        case .appleOnDevice, .cloud: categorizer
+        }
     }
+
+    /// Categorising runs on Apple Intelligence right now.
+    var isOnDevice: Bool {
+        enabled && resolvedCategorizer(appleAvailable: OnDeviceAI.isAvailable) == .appleOnDevice
+    }
+
+    /// The cloud provider has what it needs, apart from the key.
+    var cloudIsConfigured: Bool {
+        style != .appleOnDevice
+            && !model.trimmingCharacters(in: .whitespaces).isEmpty
+            && URL(string: baseURL) != nil
+    }
+
+    /// Kept for callers that check the cloud provider (e.g. statement import).
+    var isUsable: Bool { enabled && cloudIsConfigured }
+
+    var cloudProviderName: String { AIPreset.named(presetID).name }
 }
 
 /// Minimal Keychain wrapper for the API key. The item stays readable after the

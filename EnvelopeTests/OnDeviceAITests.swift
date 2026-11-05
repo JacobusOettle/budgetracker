@@ -29,25 +29,45 @@ final class OnDeviceAITests: XCTestCase {
         }
     }
 
-    func testApplePresetNeedsNoKeyModelOrURL() {
-        var config = AIConfig()
-        config.apply(AIPreset.named("apple"))
-        XCTAssertEqual(config.style, .appleOnDevice)
-        XCTAssertTrue(config.isOnDevice)
-        XCTAssertFalse(AIPreset.named("apple").needsKey)
-        XCTAssertFalse(config.isUsable, "off until you switch it on")
-        config.enabled = true
-        XCTAssertTrue(config.isUsable)
-        XCTAssertFalse(AIAPIStyle.httpStyles.contains(.appleOnDevice))
+    func testAppleIntelligenceIsTheDefaultWhenAvailable() {
+        let config = AIConfig()
+        XCTAssertTrue(config.enabled, "on by default: works with no setup on Apple Intelligence iPhones")
+        XCTAssertEqual(config.categorizer, .automatic)
+        XCTAssertEqual(config.resolvedCategorizer(appleAvailable: true), .appleOnDevice)
+        XCTAssertEqual(config.resolvedCategorizer(appleAvailable: false), .cloud)
+        var cloud = config
+        cloud.categorizer = .cloud
+        XCTAssertEqual(cloud.resolvedCategorizer(appleAvailable: true), .cloud, "your explicit choice wins")
+        XCTAssertEqual(config.isOnDevice, OnDeviceAI.isAvailable)
+    }
+
+    func testSettingsFromEarlierVersionsUseAppleAutomaticallyAndKeepTheCloudProvider() throws {
+        let old = #"{"enabled":true,"presetID":"openrouter","style":"openAICompatible","baseURL":"https://openrouter.ai/api/v1","model":"anthropic/claude-opus-5-5"}"#
+        let config = try JSONDecoder().decode(AIConfig.self, from: Data(old.utf8))
+        XCTAssertEqual(config.categorizer, .automatic)
+        XCTAssertEqual(config.presetID, "openrouter")
+        XCTAssertEqual(config.model, "anthropic/claude-opus-5-5")
+        XCTAssertTrue(config.enabled)
+    }
+
+    func testAppleAsAProviderFromYesterdaysBuildIsMovedOver() throws {
+        let old = #"{"enabled":true,"presetID":"apple","style":"appleOnDevice","baseURL":"","model":""}"#
+        let config = try JSONDecoder().decode(AIConfig.self, from: Data(old.utf8))
+        XCTAssertEqual(config.categorizer, .appleOnDevice)
+        XCTAssertEqual(config.presetID, "anthropic", "cloud provider reset to Claude for imports")
+        XCTAssertEqual(config.style, .anthropic)
+        XCTAssertTrue(config.cloudIsConfigured)
     }
 
     func testUnknownPresetFallsBackToClaude() {
         XCTAssertEqual(AIPreset.named("nope").id, "anthropic")
+        XCTAssertFalse(AIPreset.all.contains { $0.style == .appleOnDevice }, "Apple is chosen separately, not as a cloud provider")
+        XCTAssertFalse(AIAPIStyle.httpStyles.contains(.appleOnDevice))
     }
 
     func testOnDeviceIsNeverSentOverHTTP() {
         var config = AIConfig()
-        config.apply(AIPreset.named("apple"))
+        config.style = .appleOnDevice
         let prompt = CategorizationPrompt(system: "s", user: "u", budgetNames: ["Food"])
         XCTAssertThrowsError(try HTTPLLMClient.makeRequest(config: config, apiKey: "", prompt: prompt, timeout: 5, structured: true))
     }
@@ -59,12 +79,16 @@ final class OnDeviceAITests: XCTestCase {
         XCTAssertEqual(OnDeviceAI.makeClient() == nil, reason != nil)
     }
 
-    func testStatementImportNeedsACloudProvider() {
+    func testStatementImportUsesTheCloudProviderEvenWhenAppleSorts() {
         var config = AIConfig()
-        config.apply(AIPreset.named("apple"))
-        config.enabled = true
+        config.categorizer = .appleOnDevice
+        config.apply(AIPreset.named("local"))   // needs no key
+        config.model = "llama3.2"
         config.save()
-        XCTAssertNil(StatementImporter.fromSettings())
+        XCTAssertNotNil(StatementImporter.fromSettings())
+        config.model = ""
+        config.save()
+        XCTAssertNil(StatementImporter.fromSettings(), "no cloud model set up")
     }
 
     func testSmallModelsGetAShorterHistory() throws {
@@ -124,13 +148,15 @@ final class OnDeviceMessagesTests: XCTestCase {
             else { UserDefaults.standard.removeObject(forKey: AIConfig.defaultsKey) }
         }
         var config = AIConfig()
-        config.apply(AIPreset.named("apple"))
-        config.enabled = true
+        config.categorizer = .appleOnDevice
         config.save()
         XCTAssertFalse(AutoCategorizer.clientUnavailableMessage().contains("API key"))
-        config.apply(AIPreset.named("anthropic"))
+        config.categorizer = .cloud
         config.save()
         XCTAssertTrue(AutoCategorizer.clientUnavailableMessage().contains("API key"))
+        config.enabled = false
+        config.save()
+        XCTAssertTrue(AutoCategorizer.clientUnavailableMessage().contains("Turn on"))
     }
 
     func testBatchStopsWhenTheModelIsBusy() async throws {

@@ -872,9 +872,9 @@ final class StatementImporter: ObservableObject {
     /// Builds a client with a long timeout from your AI settings.
     static func fromSettings() -> StatementImporter? {
         let config = AIConfig.load()
-        // Apple's on-device model is far too small for whole statements.
-        guard !config.isOnDevice else { return nil }
-        guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty, URL(string: config.baseURL) != nil else { return nil }
+        // Always the cloud provider: Apple's on-device model is far too small
+        // for whole statements (it can still sort your everyday payments).
+        guard config.cloudIsConfigured else { return nil }
         let key = KeychainStore.get(AIConfig.keychainAccount) ?? ""
         if AIPreset.named(config.presetID).needsKey && key.isEmpty { return nil }
         // Claude reads PDFs directly; other providers get the PDF's text.

@@ -32,7 +32,7 @@ struct SettingsView: View {
                     NavigationLink {
                         AISettingsView()
                     } label: {
-                        LabeledContent("Auto-categorise with AI", value: AIConfig.load().enabled ? "On" : "Off")
+                        LabeledContent("Auto-categorise with AI", value: aiSummary)
                     }
                 } footer: {
                     Text("When no budget is armed, an AI model of your choice can pick the budget for you.")
@@ -54,6 +54,15 @@ struct SettingsView: View {
             .onChange(of: reminderEnabled) { reschedule() }
             .onChange(of: reminderHour) { reschedule() }
             .onChange(of: reminderMinute) { reschedule() }
+        }
+    }
+
+    private var aiSummary: String {
+        let config = AIConfig.load()
+        guard config.enabled else { return "Off" }
+        switch config.resolvedCategorizer(appleAvailable: OnDeviceAI.isAvailable) {
+        case .appleOnDevice: return OnDeviceAI.isAvailable ? "Apple Intelligence" : "Unavailable"
+        default: return config.cloudIsConfigured ? AIPreset.named(config.presetID).name : "Not set up"
         }
     }
 

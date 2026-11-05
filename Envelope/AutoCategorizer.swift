@@ -26,8 +26,11 @@ enum AutoCategorizer {
     /// A client from your saved settings, or nil if AI is off or incomplete.
     static func clientFromSettings() -> LLMCompleting? {
         let config = AIConfig.load()
-        guard config.isUsable else { return nil }
-        if config.isOnDevice { return OnDeviceAI.makeClient() }
+        guard config.enabled else { return nil }
+        if config.resolvedCategorizer(appleAvailable: OnDeviceAI.isAvailable) == .appleOnDevice {
+            return OnDeviceAI.makeClient()
+        }
+        guard config.cloudIsConfigured else { return nil }
         let key = KeychainStore.get(AIConfig.keychainAccount) ?? ""
         if AIPreset.named(config.presetID).needsKey && key.isEmpty { return nil }
         return HTTPLLMClient(config: config, apiKey: key)
@@ -36,9 +39,12 @@ enum AutoCategorizer {
     /// Why there's no client, for a message on screen.
     static func clientUnavailableMessage() -> String {
         let config = AIConfig.load()
-        if config.isOnDevice {
-            guard config.enabled else { return "Turn on auto-categorise in Settings → Auto-categorise with AI." }
+        guard config.enabled else { return "Turn on auto-categorise in Settings → Auto-categorise with AI." }
+        if config.resolvedCategorizer(appleAvailable: OnDeviceAI.isAvailable) == .appleOnDevice {
             return OnDeviceAI.unavailableReason ?? "Apple Intelligence isn't available right now."
+        }
+        if config.categorizer == .automatic {
+            return "Apple Intelligence isn't available on this iPhone (\(OnDeviceAI.unavailableReason ?? "unavailable")). Set up a cloud AI provider and API key in Settings instead."
         }
         return "Set up an AI provider and API key in Settings first."
     }

@@ -60,13 +60,17 @@ payment path with R12.34), the daily **missed-payment reminder** (on by default 
 **Settings → Auto-categorise with AI.** When a payment arrives and no budget is armed,
 Tally can ask an AI model which budget it belongs to.
 
-- **Apple Intelligence (on device):** the first option on iOS 26 with an Apple
-  Intelligence iPhone (15 Pro or newer, with Apple Intelligence switched on). It needs
-  no key, costs nothing, and nothing leaves the phone. The model is small (about
-  4 096 tokens of context), so it sees your last 25 sorted payments plus your
-  corrections. When the phone is busy, Apple may hold it back in the background; the
-  payment then stays Unassigned and is sorted when you open Tally. Importing bank
-  statements still needs a cloud provider.
+- **Apple Intelligence is the default** on iOS 26 Apple Intelligence iPhones (15 Pro
+  or newer, with Apple Intelligence switched on). Auto-categorise is on out of the
+  box with **Sort with: Automatic**: it runs on the phone, needs no key, costs
+  nothing, and nothing leaves the phone. On other iPhones, Automatic uses your cloud
+  provider instead. You can pick Apple Intelligence or Cloud provider explicitly.
+  - Apple's model is small (about 4 096 tokens of context), so it sees your last 25
+    sorted payments plus your corrections.
+  - When the phone is busy, Apple may hold it back in the background. The payment
+    then stays Unassigned and is sorted when you open Tally.
+- **The cloud provider is set up separately** and is always used for statement
+  imports, which are too big for the on-device model.
 - **Works with any provider.** Presets cover Claude (Anthropic), OpenAI, OpenRouter
   (any model), Google Gemini and Ollama or LM Studio on your own computer, plus a custom
   option for anything that speaks the OpenAI `/chat/completions` format. Claude uses
