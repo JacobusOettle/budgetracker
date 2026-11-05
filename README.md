@@ -14,18 +14,17 @@ to a bank, has no account or analytics, and all data stays on the phone.
 
 **Budgets tab (home)**
 - **Left this month** at the top is the total across all budgets: what you can move
-  to savings at month end if you spend nothing more. It's the same sum as Month End,
-  after unassigned spending.
-- Budgets are **square tiles, two per row**, each in a colour you choose. A tile is
-  completely filled when the whole month's amount is left and **drains as you
-  spend**: half filled at 50%, empty at 0. The border turns orange when 20% or less
-  is left and red when the budget is empty or over.
-- **Tap a tile to arm it** for **10 minutes**. A banner shows the countdown, plus a
-  clear warning when the budget is low or empty (**Tally can't block a payment**).
-  Tap it again to disarm. Arming one budget disarms the others.
-- **Long-press a tile** to edit it or change its colour, see its payments, move it
-  earlier or later, or remove it. You can also **drag a tile onto another** to
-  reorder them.
+  to savings at month end if you spend nothing more. It's the same sum as Month End.
+- Each budget is a row showing **what's left this month**, with a small block of the
+  colour you picked and a progress bar in that colour. The bar drains as you spend.
+  The amount turns orange when 20% or less is left and red when it's empty or over.
+- **Tap a budget to arm it** for **10 minutes**, with a countdown, or until a payment
+  arrives. Tap it again to disarm. If it's low or empty, the row says so clearly
+  (**Tally can't block a payment**).
+- **Long-press** a budget to edit or recolour it, see its payments, move it up or
+  down, or remove it. You can also drag to reorder with **Reorder** (top left).
+- Until the first Apple Pay payment arrives, a banner offers **Set up automatic Apple
+  Pay logging**.
 
 **When a payment arrives** (from the automation):
 1. **Armed budget:** the payment is logged there and the budget disarms. You get a
@@ -235,6 +234,22 @@ only leaves your phone when you share it.
 
 ## Setting up the Apple Pay automation
 
+**In the app:** Settings → **Set up Apple Pay logging**, or tap the banner on the
+Budgets tab. It works with **any card from any bank** in Apple Wallet.
+
+iOS doesn't let apps create Shortcuts automations themselves. Other Wallet-logging
+apps (CashJot, WalletPal, Moneko) also make you build it by hand. Tally makes it as
+short as possible:
+- **Quick setup** appears once `TallyLinks.logPaymentShortcut` holds an iCloud link
+  to a shared "Log to Tally" shortcut. You tap **Add Shortcut**, then in Shortcuts go
+  Automation → + → Wallet → Any card → Run Immediately → pick **Log to Tally**. No
+  field mapping is needed.
+- **By hand** (shown until that link exists) are the steps below.
+- **Live check:** the setup screen shows "Working" with the time of the last Apple
+  Pay payment once a real tap arrives.
+
+The by-hand steps:
+
 The same steps are in the app under **Settings → Shortcuts setup guide**.
 
 ### Create the Wallet automation (iOS 26)
@@ -244,7 +259,7 @@ On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call i
 1. Open **Shortcuts** and tap **Automation** at the bottom.
 2. Tap **+** (top right), or **New Automation** if you have none yet.
 3. Scroll the trigger list and tap **Wallet**.
-4. Under **When I tap**, select your **FNB** and **Capitec** cards.
+4. Under **When I tap**, choose **Any card**, or select every card you pay with.
 5. Leave every **Category** ticked, including **Transport**, which likely covers
    fuel, parking and Uber. Leave **Merchant** empty.
 6. At the bottom, select **Run Immediately** (not "Run After Confirmation"). Tap **Next**.

@@ -11,7 +11,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    NavigationLink("Shortcuts setup guide") { SetupGuideView() }
+                    NavigationLink("Set up Apple Pay logging") { SetupGuideView() }
                     TestPaymentButton()
                 } header: {
                     Text("Apple Pay automation")
@@ -116,48 +116,107 @@ struct TestPaymentButton: View {
     }
 }
 
+/// Sets up the Shortcuts automation that tells Tally about Apple Pay taps.
+/// iOS doesn't let apps create automations themselves, so this makes it as
+/// short as possible: a ready-made "Log to Tally" shortcut added with one tap,
+/// then a few taps in Shortcuts, and a live check that it works.
 struct SetupGuideView: View {
+    @Environment(\.openURL) private var openURL
+    @Query(sort: \Payment.date, order: .reverse) private var payments: [Payment]
+    @State private var showManual = false
+
+    private var lastApplePay: Payment? { payments.first { $0.source == .shortcut } }
+
     var body: some View {
         List {
             Section {
-                Text("After you pay with Apple Pay, an iPhone Shortcuts automation tells Tally the amount, shop and card. Tally logs it to the budget you armed, or as Unassigned. Set it up once.")
+                if let last = lastApplePay {
+                    Label("Working. Last Apple Pay payment logged \(last.date.formatted(date: .abbreviated, time: .shortened)).",
+                          systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                } else {
+                    Label("Not set up yet. Once it's set up, your next Apple Pay tap shows up here.", systemImage: "hourglass")
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("After you pay with Apple Pay, with any card from any bank, an iPhone Shortcuts automation tells Tally the amount, shop and card. iOS doesn't let apps create automations themselves, so it takes a minute to set up once.")
             }
-            Section("1. Create the automation") {
-                step(1, "Open **Shortcuts** and tap **Automation** at the bottom.")
-                step(2, "Tap **+** (top right), or **New Automation**.")
-                step(3, "Tap **Wallet**. On iOS 17 and 18 it's called **Transaction**.")
-                step(4, "Under **When I tap**, select every card you pay with.")
-                step(5, "Leave all categories ticked and Merchant empty.")
-                step(6, "Choose **Run Immediately**, then tap **Next**.")
-                step(7, "Tap **New Blank Automation** (or **Create New Shortcut**).")
+
+            if let link = TallyLinks.logPaymentShortcut {
+                Section {
+                    Button {
+                        openURL(link)
+                    } label: {
+                        Label("Add the “Log to Tally” shortcut", systemImage: "plus.square.on.square")
+                    }
+                } header: {
+                    Text("1. Add the shortcut")
+                } footer: {
+                    Text("Opens Shortcuts. Tap **Add Shortcut**, then come back here.")
+                }
+
+                Section {
+                    Button {
+                        openURL(URL(string: "shortcuts://")!)
+                    } label: {
+                        Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                    }
+                    step(1, "Tap **Automation** at the bottom, then **+**.")
+                    step(2, "Tap **Wallet** (called **Transaction** on older iOS).")
+                    step(3, "Under **When I tap**, choose **Any card**, or tick all your cards.")
+                    step(4, "Choose **Run Immediately**, then **Next**.")
+                    step(5, "Tap **Log to Tally** in the list. Done.")
+                } header: {
+                    Text("2. Turn it on for every tap")
+                }
+
+                Section {
+                    DisclosureGroup("Set it up by hand instead", isExpanded: $showManual) {
+                        manualSteps
+                    }
+                }
+            } else {
+                Section {
+                    Button {
+                        openURL(URL(string: "shortcuts://")!)
+                    } label: {
+                        Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                    }
+                    manualSteps
+                } header: {
+                    Text("Set up the automation")
+                }
             }
-            Section("2. Add Tally's action") {
-                step(8, "Search **Tally** at the bottom and tap **Log Payment**.")
-                step(9, "Tap **Amount**, tap **Shortcut Input** above the keyboard, then tap the blue bubble and choose **Amount**.")
-                step(10, "Do the same for **Merchant**, choosing **Merchant**.")
-                step(11, "Tap **›** on the action. For **Card**, choose **Shortcut Input → Card or Pass**. Leave Raw Input empty.")
-                step(12, "Switch **Show When Run** off, then go back to save.")
-            }
-            Section {
-                Text("Set up during testing? Delete the **Log Payment (Currency Amount)** action. It doesn't work and has been removed from the app.")
-            } header: {
-                Text("From the test build")
-            }
+
             Section {
                 TestPaymentButton()
             } header: {
-                Text("3. Check it")
+                Text("Check it")
             } footer: {
-                Text("The test runs inside Tally. To test the automation itself, make a small real Apple Pay payment: the ▶︎ button in Shortcuts sends no payment details.")
+                Text("The test runs inside Tally. To check the automation, make a small real Apple Pay payment: the ▶︎ button in Shortcuts sends no payment details.")
             }
+
             Section("Good to know") {
+                Text("• Works with any card in Apple Wallet, from any bank.")
                 Text("• Online and in-app purchases don't trigger the automation. Add them by hand.")
                 Text("• iPhone can occasionally miss or delay a payment. The daily reminder helps you catch these.")
                 Text("• A declined tap may still be logged. Delete it in History.")
                 Text("• If the same payment arrives twice within 2 minutes, it's only counted once.")
             }
         }
-        .navigationTitle("Setup guide")
+        .navigationTitle("Apple Pay logging")
+    }
+
+    @ViewBuilder
+    private var manualSteps: some View {
+        step(1, "In **Shortcuts**, tap **Automation**, then **+**.")
+        step(2, "Tap **Wallet** (called **Transaction** on older iOS).")
+        step(3, "Under **When I tap**, choose **Any card**, or tick all your cards. Leave categories and merchants as they are.")
+        step(4, "Choose **Run Immediately**, then **Next**, then **New Blank Automation**.")
+        step(5, "Search **Tally** and tap **Log Payment**.")
+        step(6, "Tap **Amount** → **Shortcut Input** above the keyboard → tap the blue bubble → **Amount**.")
+        step(7, "Do the same for **Merchant** (→ **Merchant**) and, under **›**, **Card** (→ **Card or Pass**).")
+        step(8, "Switch **Show When Run** off and save.")
     }
 
     private func step(_ number: Int, _ text: LocalizedStringKey) -> some View {

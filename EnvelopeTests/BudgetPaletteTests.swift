@@ -3,8 +3,8 @@ import SwiftData
 @testable import Envelope
 
 @MainActor
-final class BudgetTileTests: XCTestCase {
-    func testFillDrainsWithWhatsLeft() {
+final class BudgetPaletteTests: XCTestCase {
+    func testProgressDrainsWithWhatsLeft() {
         XCTAssertEqual(BudgetPalette.fill(leftCents: 300_000, monthlyCents: 300_000), 1)
         XCTAssertEqual(BudgetPalette.fill(leftCents: 150_000, monthlyCents: 300_000), 0.5)
         XCTAssertEqual(BudgetPalette.fill(leftCents: 0, monthlyCents: 300_000), 0)
@@ -44,5 +44,13 @@ final class BudgetTileTests: XCTestCase {
         XCTAssertEqual(try order(), ["Fuel", "Food", "Fun"], "already first")
         try BudgetService.move(food, by: 1, in: context)
         XCTAssertEqual(try order(), ["Fuel", "Fun", "Food"])
+
+        // List drag in Reorder mode (SwiftUI onMove offsets).
+        try BudgetService.move(fromOffsets: IndexSet(integer: 2), toOffset: 0, in: context)
+        XCTAssertEqual(try order(), ["Food", "Fuel", "Fun"])
+        try BudgetService.move(fromOffsets: IndexSet(integer: 0), toOffset: 3, in: context)
+        XCTAssertEqual(try order(), ["Fuel", "Fun", "Food"])
+        try BudgetService.move(fromOffsets: IndexSet([0, 1]), toOffset: 3, in: context)
+        XCTAssertEqual(try order(), ["Food", "Fuel", "Fun"])
     }
 }

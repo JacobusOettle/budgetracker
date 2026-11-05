@@ -15,6 +15,9 @@ struct BudgetsHomeView: View {
     @State private var editingBudget: Budget?
     @State private var viewingBudget: Budget?
     @State private var importingStatement = false
+    @State private var showingSetup = false
+    @State private var editMode: EditMode = .inactive
+    @AppStorage("setupBanner.hidden") private var hideSetupBanner = false
     @State private var removingBudget: Budget?
     @State private var monthEnd: MonthTarget?
     @State private var errorMessage: String?
@@ -36,6 +39,13 @@ struct BudgetsHomeView: View {
                     .navigationTitle(budget.name)
             }
             .toolbar {
+                if budgets.count > 1 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(editMode.isEditing ? "Done" : "Reorder") {
+                            withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                        }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("New budget", systemImage: "plus") { showingNewBudget = true }
@@ -51,6 +61,7 @@ struct BudgetsHomeView: View {
             }
             .sheet(isPresented: $showingNewBudget) { BudgetFormView(budget: nil) }
             .sheet(isPresented: $importingStatement) { StatementImportView() }
+            .sheet(isPresented: $showingSetup) { NavigationStack { SetupGuideView() } }
             .sheet(item: $editingBudget) { BudgetFormView(budget: $0) }
             .sheet(isPresented: $showingNewPayment) { PaymentFormView(payment: nil) }
             .sheet(item: $monthEnd) { MonthEndView(month: $0.start) }
@@ -85,65 +96,105 @@ struct BudgetsHomeView: View {
             closedKeys: Set(closes.map(\.monthKey)),
             now: now
         )
-        let armed = budgets.first { Arming.isArmed(armedAt: $0.armedAt, now: now) }
+        let automationWorking = payments.contains { $0.source == .shortcut }
 
-        ScrollView {
-            VStack(spacing: 14) {
-                if !unassigned.isEmpty || !review.isEmpty {
+        List {
+            if !automationWorking && !hideSetupBanner {
+                Section {
+                    Button { showingSetup = true } label: {
+                        Label("Set up automatic Apple Pay logging (about 1 minute)", systemImage: "wave.3.right")
+                    }
+                    Button("Not now", role: .cancel) { hideSetupBanner = true }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !unassigned.isEmpty || !review.isEmpty {
+                Section {
                     NavigationLink {
                         PaymentsListView(mode: .needsAttention)
                             .navigationTitle("To sort out")
                     } label: {
-                        banner(attentionText(unassigned: unassigned.count, review: review.count),
-                               systemImage: "exclamationmark.circle.fill", tint: .orange)
+                        Label(attentionText(unassigned: unassigned.count, review: review.count),
+                              systemImage: "exclamationmark.circle.fill")
+                            .foregroundStyle(.orange)
                     }
-                    .buttonStyle(.plain)
                 }
+            }
 
-                if let month = unclosed.first {
+            if let month = unclosed.first {
+                Section {
                     Button {
                         monthEnd = MonthTarget(start: month)
                     } label: {
-                        banner("Close \(MonthMath.name(month)): move leftovers to savings",
-                               systemImage: "calendar.badge.checkmark", tint: .accentColor)
+                        Label("Close \(MonthMath.name(month)): move leftovers to savings",
+                              systemImage: "calendar.badge.checkmark")
                     }
-                    .buttonStyle(.plain)
-                }
-
-                if budgets.isEmpty {
-                    emptyState
-                } else {
-                    leftoverTotal(now: now)
-                    if let armed {
-                        armedBanner(armed, now: now)
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                        ForEach(budgets) { budget in
-                            tile(budget, now: now)
-                        }
-                    }
-                    Text("Tap a budget just before you pay: the next payment in the following 10 minutes is logged to it. Tally can't block or change a payment. Long-press a budget to edit, recolour or move it, or drag it onto another.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+
+            if budgets.isEmpty {
+                Section {
+                    Text("Add budgets like Food, Fuel and Fun, each with a monthly amount, or let the AI set them up from a bank statement.")
+                        .foregroundStyle(.secondary)
+                    Button("Add your first budget") { showingNewBudget = true }
+                    Button("Import a bank statement (PDF or CSV)…") { importingStatement = true }
+                }
+            } else {
+                Section {
+                    leftoverTotal(now: now)
+                }
+
+                Section {
+                    ForEach(budgets) { budget in
+                        let index = budgets.firstIndex { $0.id == budget.id } ?? 0
+                        Button {
+                            toggle(budget, now: now)
+                        } label: {
+                            BudgetCard(budget: budget, now: now)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(Arming.isArmed(armedAt: budget.armedAt, now: now)
+                                           ? Color.accentColor.opacity(0.18) : nil)
+                        .contextMenu {
+                            Button("Edit or recolour", systemImage: "paintpalette") { editingBudget = budget }
+                            Button("Payments", systemImage: "list.bullet") { viewingBudget = budget }
+                            if index > 0 {
+                                Button("Move up", systemImage: "arrow.up") {
+                                    perform { try BudgetService.move(budget, by: -1, in: context) }
+                                }
+                            }
+                            if index < budgets.count - 1 {
+                                Button("Move down", systemImage: "arrow.down") {
+                                    perform { try BudgetService.move(budget, by: 1, in: context) }
+                                }
+                            }
+                            Button("Remove", systemImage: "trash", role: .destructive) { removingBudget = budget }
+                        }
+                        .sensoryFeedback(.impact, trigger: budget.armedAt)
+                    }
+                    .onMove { from, to in
+                        perform { try BudgetService.move(fromOffsets: from, toOffset: to, in: context) }
+                    }
+                } footer: {
+                    Text("Tap a budget just before you pay. The next payment in the following 10 minutes is logged to it. Tally can't block or change a payment. Long-press a budget to edit, recolour or move it.")
+                }
+            }
         }
-        .background(Color(.systemGroupedBackground))
+        .environment(\.editMode, $editMode)
     }
 
     /// What's left across all budgets this month: what you could move to
     /// savings at month end if you spend nothing more. Same sum as Month End.
     private func leftoverTotal(now: Date) -> some View {
         let summary = MonthEnd.summary(budgets: allBudgets, payments: payments, month: now)
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 2) {
             Text("Left this month")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             Text(Money.format(cents: summary.toSaveCents))
-                .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(summary.totalLeftCents < 0 ? Color.red : Color.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -151,9 +202,7 @@ struct BudgetsHomeView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.vertical, 4)
     }
 
     private func leftoverCaption(_ summary: MonthEndSummary) -> String {
@@ -165,100 +214,6 @@ struct BudgetsHomeView: View {
             text += " After \(Money.format(cents: summary.unassignedCents)) of unassigned spending."
         }
         return text
-    }
-
-    private func armedBanner(_ budget: Budget, now: Date) -> some View {
-        let left = budget.leftCents(now: now)
-        let warning = BudgetWarning.level(leftCents: left, monthlyCents: budget.monthlyCents)
-        let color = BudgetPalette.color(for: budget)
-        let remaining = Arming.remaining(armedAt: budget.armedAt, now: now)
-        return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "bolt.fill")
-                .font(.title3)
-                .foregroundStyle(color)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(budget.name) armed · \(Arming.countdown(remaining))")
-                    .font(.headline.monospacedDigit())
-                Text(armedMessage(budget, warning: warning, left: left))
-                    .font(.subheadline)
-                    .foregroundStyle(warning == .none ? Color.secondary : BudgetCard.color(for: warning))
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    private func armedMessage(_ budget: Budget, warning: BudgetWarning, left: Int) -> String {
-        switch warning {
-        case .none:
-            return "Pay now. The next payment goes to \(budget.name). Tap it again to disarm."
-        case .low:
-            return "Only \(Money.format(cents: left)) left. If you pay more, the payment still goes through: Tally can't stop it."
-        case .empty:
-            let state = left == 0 ? "is empty" : "is \(Money.format(cents: -left)) over budget"
-            return "\(budget.name) \(state). The payment still goes through: Tally can't stop it."
-        }
-    }
-
-    private func tile(_ budget: Budget, now: Date) -> some View {
-        let index = budgets.firstIndex { $0.id == budget.id } ?? 0
-        return Button {
-            toggle(budget, now: now)
-        } label: {
-            BudgetTile(budget: budget, now: now)
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button("Edit or recolour", systemImage: "paintpalette") { editingBudget = budget }
-            Button("Payments", systemImage: "list.bullet") { viewingBudget = budget }
-            if index > 0 {
-                Button("Move earlier", systemImage: "arrow.left") {
-                    perform { try BudgetService.move(budget, by: -1, in: context) }
-                }
-            }
-            if index < budgets.count - 1 {
-                Button("Move later", systemImage: "arrow.right") {
-                    perform { try BudgetService.move(budget, by: 1, in: context) }
-                }
-            }
-            Button("Remove", systemImage: "trash", role: .destructive) { removingBudget = budget }
-        }
-        .draggable(budget.id.uuidString) {
-            BudgetTile(budget: budget, now: now).frame(width: 140, height: 140)
-        }
-        .dropDestination(for: String.self) { items, _ in
-            guard let id = items.first.flatMap(UUID.init(uuidString:)),
-                  let dragged = budgets.first(where: { $0.id == id }),
-                  dragged.id != budget.id else { return false }
-            perform { try BudgetService.move(dragged, onto: budget, in: context) }
-            return true
-        }
-        .sensoryFeedback(.impact, trigger: budget.armedAt)
-    }
-
-    private func banner(_ text: String, systemImage: String, tint: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: systemImage).foregroundStyle(tint)
-            Text(text).foregroundStyle(.primary).multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
-        }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add budgets like Food, Fuel and Fun, each with a monthly amount, or let the AI set them up from a bank statement.")
-                .foregroundStyle(.secondary)
-            Button("Add your first budget") { showingNewBudget = true }
-                .buttonStyle(.borderedProminent)
-            Button("Import a bank statement (PDF or CSV)…") { importingStatement = true }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func attentionText(unassigned: Int, review: Int) -> String {
@@ -294,17 +249,23 @@ struct BudgetCard: View {
         let warning = BudgetWarning.level(leftCents: left, monthlyCents: budget.monthlyCents)
         let color = Self.color(for: warning)
 
+        let accent = BudgetPalette.color(for: budget)
+
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(accent.gradient)
+                    .frame(width: 14, height: 14)
+                    .accessibilityHidden(true)
                 Text(budget.name).font(.headline)
                 Spacer()
                 if armed {
                     Label("Armed \(Arming.countdown(remaining))", systemImage: "bolt.fill")
                         .font(.caption.bold().monospacedDigit())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(BudgetPalette.textOnFill(forKey: BudgetPalette.key(for: budget)))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.accentColor))
+                        .background(Capsule().fill(accent))
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -315,8 +276,8 @@ struct BudgetCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            ProgressView(value: fractionLeft(left))
-                .tint(warning == .none ? Color.accentColor : color)
+            ProgressView(value: BudgetPalette.fill(leftCents: left, monthlyCents: budget.monthlyCents))
+                .tint(warning == .none ? accent : color)
             if armed {
                 Text(armedMessage(warning: warning, left: left))
                     .font(.footnote.weight(warning == .none ? .regular : .semibold))
@@ -333,11 +294,6 @@ struct BudgetCard: View {
         case .low: return .orange
         case .empty: return .red
         }
-    }
-
-    private func fractionLeft(_ left: Int) -> Double {
-        guard budget.monthlyCents > 0 else { return 0 }
-        return min(1, max(0, Double(left) / Double(budget.monthlyCents)))  // display only
     }
 
     private func armedMessage(warning: BudgetWarning, left: Int) -> String {

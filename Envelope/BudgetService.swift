@@ -64,7 +64,17 @@ enum BudgetService {
         try renumber(list, in: context)
     }
 
-    /// "Move earlier" (-1) / "Move later" (+1).
+    /// List reordering (drag in Reorder mode).
+    static func move(fromOffsets: IndexSet, toOffset: Int, in context: ModelContext) throws {
+        let list = try activeBudgets(in: context)
+        let moving = fromOffsets.sorted().filter { $0 < list.count }.map { list[$0] }
+        var rest = list.enumerated().filter { !fromOffsets.contains($0.offset) }.map(\.element)
+        let insertAt = toOffset - fromOffsets.filter { $0 < toOffset }.count
+        rest.insert(contentsOf: moving, at: max(0, min(insertAt, rest.count)))
+        try renumber(rest, in: context)
+    }
+
+    /// "Move up" (-1) / "Move down" (+1).
     static func move(_ budget: Budget, by offset: Int, in context: ModelContext) throws {
         var list = try activeBudgets(in: context)
         guard let from = list.firstIndex(where: { $0.id == budget.id }) else { return }
