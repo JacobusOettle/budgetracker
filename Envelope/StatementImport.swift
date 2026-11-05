@@ -402,19 +402,54 @@ enum StatementImport {
 
     // MARK: Plan
 
+    /// A payment already in Tally, as the matcher sees it.
+    struct ExistingPayment: Equatable {
+        let id: UUID
+        let date: Date
+        let cents: Int
+        let merchant: String
+        let hasBudget: Bool
+    }
+
     struct PlannedPayment: Equatable {
         let transaction: Transaction
         /// Lowercased name of the proposed budget, or nil if no budget fits.
         let budgetKey: String?
     }
 
+    /// A statement row that is the same payment as one already in Tally
+    /// (logged by Apple Pay, typed in, or from an earlier import). It's merged
+    /// into that payment instead of being added again.
+    struct PlannedMerge: Equatable, Identifiable {
+        enum Kind: Equatable {
+            /// Same amount, within a few days: merged automatically.
+            case exact
+            /// Same shop on about the same day but a different amount (fuel
+            /// pre-authorisation, tip, or an amount Apple Pay couldn't read).
+            /// Shown for you to confirm; merging takes the statement's amount.
+            case possible
+        }
+
+        let transaction: Transaction
+        let existing: ExistingPayment
+        let kind: Kind
+        let budgetKey: String?
+
+        var id: String { existing.id.uuidString }
+        /// The existing payment has no budget and the statement suggests one.
+        var fillsInBudget: Bool { !existing.hasBudget && budgetKey != nil }
+    }
+
     struct Plan: Equatable {
         var budgets: [ProposedBudget]
+        /// New payments to add.
         let payments: [PlannedPayment]
+        /// Rows that are payments you already have.
+        let merges: [PlannedMerge]
         let summary: SpendingSummary
         /// Income, transfers and refunds: not imported.
         let skippedNotSpending: Int
-        /// Already in Tally (same day and amount), or repeated across files.
+        /// The same row repeated in overlapping files.
         let skippedDuplicates: Int
 
         func payments(for budget: ProposedBudget) -> [PlannedPayment] {
@@ -422,20 +457,23 @@ enum StatementImport {
         }
 
         var unmatched: [PlannedPayment] { payments.filter { $0.budgetKey == nil } }
+        var exactMerges: [PlannedMerge] { merges.filter { $0.kind == .exact } }
+        var possibleMerges: [PlannedMerge] { merges.filter { $0.kind == .possible } }
     }
 
-    /// Matches each spending transaction to a proposed budget by category and
-    /// drops duplicates:
-    /// - Overlapping files: a row that appears in several files is imported as
-    ///   many times as it appears in any one file (two identical coffees on one
-    ///   day in one statement are both kept).
-    /// - Already in Tally: each existing payment cancels out one statement row
-    ///   on the same day for the same amount, so re-importing is safe, but
-    ///   extra same-amount rows still come in.
+    /// Builds the import plan:
+    /// 1. Keeps spending only, and drops rows repeated across overlapping files
+    ///    (a row counts as many times as it appears in any one file, so two
+    ///    identical coffees on one day in one statement are both kept).
+    /// 2. Matches rows to payments already in Tally, one to one (see
+    ///    `matchExisting`). Matched rows are merged, never added again, so
+    ///    importing the same statement twice, or a statement covering months
+    ///    Apple Pay already logged, creates no duplicates.
+    /// 3. Gives each remaining row a proposed budget by its category.
     static func plan(
         transactions: [Transaction],
         budgets: [ProposedBudget],
-        existing: [(date: Date, cents: Int)],
+        existing: [ExistingPayment],
         calendar: Calendar = .current
     ) -> Plan {
         func dayKey(_ date: Date) -> String { DataExport.dayString(date, calendar: calendar) }
@@ -445,6 +483,10 @@ enum StatementImport {
             for category in budget.categories where categoryToBudget[category.lowercased()] == nil {
                 categoryToBudget[category.lowercased()] = budget.id
             }
+        }
+        func budgetKey(for t: Transaction) -> String? {
+            categoryToBudget[t.category.lowercased()]
+                ?? budgets.first { $0.name.compare(t.category, options: .caseInsensitive) == .orderedSame }?.id
         }
 
         func rowKey(_ t: Transaction) -> String { "\(dayKey(t.date))|\(t.cents)|\(t.description.lowercased())" }
@@ -459,14 +501,10 @@ enum StatementImport {
             for (key, count) in counts { allowed[key] = max(allowed[key] ?? 0, count) }
         }
 
-        var remainingExisting: [String: Int] = [:]
-        for e in existing { remainingExisting["\(dayKey(e.date))|\(e.cents)", default: 0] += 1 }
-
         var used: [String: Int] = [:]
-        var planned: [PlannedPayment] = []
+        var rows: [Transaction] = []
         var notSpending = 0
         var duplicates = 0
-
         for t in transactions {
             guard t.kind == .spend else { notSpending += 1; continue }
             let key = rowKey(t)
@@ -475,79 +513,206 @@ enum StatementImport {
                 duplicates += 1
                 continue
             }
-            let dayAmount = "\(dayKey(t.date))|\(t.cents)"
-            if remainingExisting[dayAmount, default: 0] > 0 {
-                remainingExisting[dayAmount, default: 0] -= 1
-                duplicates += 1
-                continue
+            rows.append(t)
+        }
+
+        let matches = matchExisting(rows, existing, calendar: calendar)
+        var planned: [PlannedPayment] = []
+        var merges: [PlannedMerge] = []
+        for (i, t) in rows.enumerated() {
+            if let match = matches[i] {
+                merges.append(PlannedMerge(transaction: t, existing: existing[match.0], kind: match.1, budgetKey: budgetKey(for: t)))
+            } else {
+                planned.append(PlannedPayment(transaction: t, budgetKey: budgetKey(for: t)))
             }
-            let budgetKey = categoryToBudget[t.category.lowercased()]
-                ?? budgets.first { $0.name.compare(t.category, options: .caseInsensitive) == .orderedSame }?.id
-            planned.append(PlannedPayment(transaction: t, budgetKey: budgetKey))
         }
 
         return Plan(
             budgets: budgets,
             payments: planned,
+            merges: merges,
             summary: summarize(transactions, calendar: calendar),
             skippedNotSpending: notSpending,
             skippedDuplicates: duplicates
         )
     }
 
+    /// Pairs statement rows with existing payments, each used at most once.
+    /// Bank statements often show the date the bank processed a payment, 1–3
+    /// days after the tap, so dates are compared with some slack:
+    /// - A: same amount, same shop, within 3 days (closest dates first).
+    /// - B: same amount, within 1 day, even if the descriptions don't look
+    ///   alike (statements can be cryptic).
+    /// - C (possible): same shop within 2 days but a different amount, within
+    ///   half to double, or the existing payment's amount was unreadable.
+    /// Returns statement row index → (existing payment index, kind).
+    static func matchExisting(_ rows: [Transaction], _ existing: [ExistingPayment], calendar: Calendar = .current) -> [Int: (Int, PlannedMerge.Kind)] {
+        guard !rows.isEmpty, !existing.isEmpty else { return [:] }
+
+        func dayNumber(_ date: Date) -> Int {
+            let comps = calendar.dateComponents([.year, .month, .day], from: date)
+            var utc = Calendar(identifier: .gregorian)
+            utc.timeZone = TimeZone(identifier: "UTC")!
+            let day = utc.date(from: DateComponents(year: comps.year, month: comps.month, day: comps.day)) ?? date
+            return Int((day.timeIntervalSinceReferenceDate / 86_400).rounded())
+        }
+        let rowDays = rows.map { dayNumber($0.date) }
+        let existingDays = existing.map { dayNumber($0.date) }
+        let rowTokens = rows.map { merchantTokens($0.description) }
+        let existingTokens = existing.map { merchantTokens($0.merchant) }
+
+        var byDay: [Int: [Int]] = [:]
+        for (e, day) in existingDays.enumerated() { byDay[day, default: []].append(e) }
+        func nearby(_ row: Int, within days: Int) -> [Int] {
+            (-days...days).flatMap { byDay[rowDays[row] + $0] ?? [] }
+        }
+
+        var rowTaken = [Bool](repeating: false, count: rows.count)
+        var existingTaken = [Bool](repeating: false, count: existing.count)
+        var result: [Int: (Int, PlannedMerge.Kind)] = [:]
+
+        struct Candidate {
+            let row: Int
+            let existing: Int
+            let days: Int
+            let similarity: Double
+        }
+        func assign(_ candidates: [Candidate], as kind: PlannedMerge.Kind) {
+            let ordered = candidates.sorted {
+                ($0.days, -$0.similarity, $0.row, $0.existing) < ($1.days, -$1.similarity, $1.row, $1.existing)
+            }
+            for c in ordered where !rowTaken[c.row] && !existingTaken[c.existing] {
+                rowTaken[c.row] = true
+                existingTaken[c.existing] = true
+                result[c.row] = (c.existing, kind)
+            }
+        }
+        func candidates(within days: Int, _ accept: (Int, Int, Double) -> Bool) -> [Candidate] {
+            var list: [Candidate] = []
+            for r in rows.indices where !rowTaken[r] {
+                for e in nearby(r, within: days) where !existingTaken[e] {
+                    let similarity = merchantSimilarity(rowTokens[r], existingTokens[e])
+                    if accept(r, e, similarity) {
+                        list.append(Candidate(row: r, existing: e, days: abs(rowDays[r] - existingDays[e]), similarity: similarity))
+                    }
+                }
+            }
+            return list
+        }
+
+        assign(candidates(within: 3) { r, e, sim in rows[r].cents == existing[e].cents && sim >= 0.5 }, as: .exact)
+        assign(candidates(within: 1) { r, e, _ in rows[r].cents == existing[e].cents }, as: .exact)
+        assign(candidates(within: 2) { r, e, sim in
+            guard sim >= 0.5 else { return false }
+            let a = Double(rows[r].cents), b = Double(existing[e].cents)
+            return b == 0 || (a >= b * 0.5 && a <= b * 2)
+        }, as: .possible)
+        return result
+    }
+
+    static let merchantStopwords: Set<String> = [
+        "pos", "purchase", "purch", "card", "debit", "credit", "payment", "the", "and", "pty", "ltd",
+        "int", "online", "www", "com", "zaf", "rsa", "store", "shop", "tap", "pay", "apple",
+    ]
+
+    /// Words that identify a merchant: lowercased, 3+ letters, no card or
+    /// reference numbers, no filler like "POS PURCHASE".
+    static func merchantTokens(_ text: String) -> Set<String> {
+        Set(text.lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { $0.count >= 3 && !merchantStopwords.contains($0) && !$0.allSatisfy(\.isNumber) })
+    }
+
+    /// Share of the shorter name's words found in the other name (a word
+    /// also matches if one is a prefix of the other, e.g. "woolworth").
+    /// "KFC Wierda Park" vs "KFC" = 1.0; "Engen" vs "Spar" = 0.
+    static func merchantSimilarity(_ a: Set<String>, _ b: Set<String>) -> Double {
+        guard !a.isEmpty, !b.isEmpty else { return 0 }
+        let (small, large) = a.count <= b.count ? (a, b) : (b, a)
+        let shared = small.filter { word in
+            large.contains { other in
+                word == other || (min(word.count, other.count) >= 4 && (word.hasPrefix(other) || other.hasPrefix(word)))
+            }
+        }
+        return Double(shared.count) / Double(small.count)
+    }
+
+    static func merchantSimilarity(_ a: String, _ b: String) -> Double {
+        merchantSimilarity(merchantTokens(a), merchantTokens(b))
+    }
+
     // MARK: Save
 
     struct Result: Equatable {
-        let budgetsCreated: Int
-        let budgetsReused: Int
-        let paymentsImported: Int
-        let unassignedImported: Int
+        var budgetsCreated = 0
+        var budgetsReused = 0
+        /// New payments added.
+        var paymentsImported = 0
+        /// New payments added without a budget.
+        var unassignedImported = 0
+        /// Statement rows merged into payments you already had.
+        var merged = 0
+        /// Merged payments that had no budget and now have one.
+        var budgetsFilledIn = 0
+        /// Merged payments whose amount was corrected from the statement.
+        var amountsUpdated = 0
     }
 
     /// Saves the reviewed plan.
     /// - `included`: ids of the budgets you kept. Budgets you switched off
-    ///   aren't created, and their payments aren't imported.
+    ///   aren't created, and their new payments aren't imported.
     /// - `importUnmatched`: also import payments that fit no budget, as
     ///   Unassigned (they're not sent to the AI again automatically).
+    /// - `rejectedMerges`: possible matches you said are different payments;
+    ///   they're imported as new payments instead.
+    /// Merged rows never create a payment: the existing one is kept (with its
+    /// budget and exact time), marked as confirmed by the statement, given a
+    /// budget if it had none, and for a confirmed possible match, given the
+    /// statement's amount.
     /// An existing budget with the same name is reused, keeping its amount.
     /// Budgets start from the month of their earliest imported payment, so
     /// past months add up in Month End.
     @MainActor
     @discardableResult
-    static func apply(_ plan: Plan, included: Set<String>, importUnmatched: Bool, now: Date = .now, in context: ModelContext) throws -> Result {
+    static func apply(
+        _ plan: Plan,
+        included: Set<String>,
+        importUnmatched: Bool,
+        rejectedMerges: Set<String> = [],
+        now: Date = .now,
+        in context: ModelContext
+    ) throws -> Result {
         let active = try BudgetService.activeBudgets(in: context)
         // Fix your start month before budgets are backdated (see UsageStart).
         _ = UsageStart.date(budgets: try context.fetch(FetchDescriptor<Budget>()), now: now)
         var budgetByKey: [String: Budget] = [:]
-        var created = 0
-        var reused = 0
+        var result = Result()
         var order = (active.map(\.sortOrder).max() ?? -1) + 1
 
         for proposal in plan.budgets where included.contains(proposal.id) {
-            let earliest = plan.payments(for: proposal).map(\.transaction.date).min()
-            let start = earliest.map { min(now, MonthMath.startOfMonth($0)) } ?? now
+            let dates = plan.payments(for: proposal).map(\.transaction.date)
+                + plan.merges.filter { $0.budgetKey == proposal.id }.map(\.transaction.date)
+            let start = dates.min().map { min(now, MonthMath.startOfMonth($0)) } ?? now
             if let match = active.first(where: { $0.name.compare(proposal.name, options: .caseInsensitive) == .orderedSame }) {
                 budgetByKey[proposal.id] = match
                 if match.createdAt > start { match.createdAt = start }
-                reused += 1
+                result.budgetsReused += 1
             } else {
                 let budget = Budget(name: proposal.name, monthlyCents: proposal.monthlyCents, sortOrder: order, createdAt: start)
                 order += 1
                 context.insert(budget)
                 budgetByKey[proposal.id] = budget
-                created += 1
+                result.budgetsCreated += 1
             }
         }
 
-        var imported = 0
-        var unassigned = 0
-        for item in plan.payments {
-            let budget = item.budgetKey.flatMap { budgetByKey[$0] }
+        func insertNew(_ t: Transaction, budgetKey: String?) {
+            let budget = budgetKey.flatMap { budgetByKey[$0] }
             if budget == nil {
                 // Either no budget fits, or you switched its budget off.
-                guard item.budgetKey == nil, importUnmatched else { continue }
+                guard budgetKey == nil, importUnmatched else { return }
             }
-            let t = item.transaction
             let payment = Payment(
                 amountCents: t.cents,
                 merchant: t.description,
@@ -561,12 +726,47 @@ enum StatementImport {
             payment.budget = budget
             payment.assignment = budget == nil ? .unassigned : .imported
             payment.aiAttempted = true
-            imported += 1
-            if budget == nil { unassigned += 1 }
+            payment.statementMatched = true
+            result.paymentsImported += 1
+            if budget == nil { result.unassignedImported += 1 }
+        }
+
+        for item in plan.payments {
+            insertNew(item.transaction, budgetKey: item.budgetKey)
+        }
+
+        let current = try context.fetch(FetchDescriptor<Payment>())
+        let byID = Dictionary(current.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for merge in plan.merges {
+            let t = merge.transaction
+            if merge.kind == .possible && rejectedMerges.contains(merge.id) {
+                insertNew(t, budgetKey: merge.budgetKey)
+                continue
+            }
+            guard let payment = byID[merge.existing.id] else {
+                // Deleted since the plan was made: add it as a new payment.
+                insertNew(t, budgetKey: merge.budgetKey)
+                continue
+            }
+            payment.statementMatched = true
+            if merge.kind == .possible && payment.amountCents != t.cents {
+                let was = payment.amountCents
+                payment.amountCents = t.cents
+                payment.needsReview = false
+                let line = "Amount from bank statement: \(Money.format(cents: t.cents)) (was \(Money.format(cents: was)))."
+                payment.note = payment.note.isEmpty ? line : payment.note + " " + line
+                result.amountsUpdated += 1
+            }
+            if payment.budget == nil, let budget = merge.budgetKey.flatMap({ budgetByKey[$0] }) {
+                payment.budget = budget
+                payment.assignment = .imported
+                result.budgetsFilledIn += 1
+            }
+            result.merged += 1
         }
 
         try context.save()
-        return Result(budgetsCreated: created, budgetsReused: reused, paymentsImported: imported, unassignedImported: unassigned)
+        return result
     }
 
     // MARK: Helpers
@@ -654,7 +854,9 @@ final class StatementImporter: ObservableObject {
                 throw LLMError.emptyResponse
             }
 
-            let existing = try context.fetch(FetchDescriptor<Payment>()).map { (date: $0.date, cents: $0.amountCents) }
+            let existing = try context.fetch(FetchDescriptor<Payment>())
+                .filter { $0.source != .test }
+                .map { StatementImport.ExistingPayment(id: $0.id, date: $0.date, cents: $0.amountCents, merchant: $0.merchant, hasBudget: $0.budget != nil) }
             plan = StatementImport.plan(transactions: transactions, budgets: budgets, existing: existing, calendar: calendar)
             stage = .review
         } catch is CancellationError {
@@ -682,10 +884,10 @@ final class StatementImporter: ObservableObject {
         }
     }
 
-    func apply(included: Set<String>, importUnmatched: Bool, in context: ModelContext) {
+    func apply(included: Set<String>, importUnmatched: Bool, rejectedMerges: Set<String> = [], in context: ModelContext) {
         guard let plan else { return }
         do {
-            let result = try StatementImport.apply(plan, included: included, importUnmatched: importUnmatched, in: context)
+            let result = try StatementImport.apply(plan, included: included, importUnmatched: importUnmatched, rejectedMerges: rejectedMerges, in: context)
             stage = .done(result)
         } catch {
             stage = .failed(error.localizedDescription)

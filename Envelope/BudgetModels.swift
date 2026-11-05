@@ -73,6 +73,8 @@ final class Payment {
     /// If you corrected the AI: the budget it had picked. Sent back to the AI
     /// as a correction so it learns.
     var aiOriginalBudgetName: String = ""
+    /// Seen on a bank statement (imported from one, or matched to one).
+    var statementMatched: Bool = false
 
     init(
         amountCents: Int,

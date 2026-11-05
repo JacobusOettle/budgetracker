@@ -131,11 +131,12 @@ final class StatementImportTests: XCTestCase {
                 tx(d(2026, 10, 26), "To savings", 100_000, .transfer, "Transfer"),
             ],
             budgets: budgets,
-            existing: [(date: d(2026, 10, 2).addingTimeInterval(3600 * 7), cents: 10_070)],
+            existing: [.init(id: UUID(), date: d(2026, 10, 2).addingTimeInterval(3600 * 7), cents: 10_070, merchant: "KFC Wierda Park", hasBudget: true)],
             calendar: cal
         )
         XCTAssertEqual(plan.skippedNotSpending, 2)
-        XCTAssertEqual(plan.skippedDuplicates, 2)
+        XCTAssertEqual(plan.skippedDuplicates, 1, "the row repeated in the overlapping file")
+        XCTAssertEqual(plan.exactMerges.map(\.transaction.description), ["KFC"], "already logged by Apple Pay")
         XCTAssertEqual(plan.payments.count, 3)
         XCTAssertEqual(plan.payments(for: budgets[0]).map(\.transaction.description), ["Checkers"])
         XCTAssertEqual(plan.payments(for: budgets[1]).map(\.transaction.description), ["Engen"])
@@ -164,10 +165,10 @@ final class StatementImportTests: XCTestCase {
                 tx(d(2026, 10, 2), "Parking", 5_000, .spend, "Transport"),
             ],
             budgets: [],
-            existing: [(date: d(2026, 10, 2), cents: 5_000)],
+            existing: [.init(id: UUID(), date: d(2026, 10, 2), cents: 5_000, merchant: "", hasBudget: false)],
             calendar: cal
         )
-        XCTAssertEqual(plan.skippedDuplicates, 1, "only the one already logged by Apple Pay")
+        XCTAssertEqual(plan.merges.count, 1, "only the one already logged by Apple Pay")
         XCTAssertEqual(plan.payments.map(\.transaction.description), ["Parking"])
     }
 

@@ -16,6 +16,8 @@ struct StatementImportView: View {
     @State private var amountTexts: [String: String] = [:]
     @State private var included: Set<String> = []
     @State private var importUnmatched = false
+    /// Possible matches you said are different payments.
+    @State private var rejectedMerges: Set<String> = []
     @State private var aiReady = false
     @State private var runTask: Task<Void, Never>?
     /// Files waiting to start; a locked PDF here needs its password first.
@@ -147,15 +149,49 @@ struct StatementImportView: View {
                 if let first = plan.summary.firstDate, let last = plan.summary.lastDate {
                     LabeledContent("Period", value: "\(first.formatted(date: .abbreviated, time: .omitted)) – \(last.formatted(date: .abbreviated, time: .omitted))")
                 }
-                LabeledContent("Spending payments", value: "\(plan.payments.count)")
+                LabeledContent("New payments", value: "\(plan.payments.count)")
+                if !plan.exactMerges.isEmpty {
+                    LabeledContent("Already in Tally (merged)", value: "\(plan.exactMerges.count)")
+                }
                 if plan.skippedNotSpending > 0 {
                     LabeledContent("Income & transfers (skipped)", value: "\(plan.skippedNotSpending)")
                 }
                 if plan.skippedDuplicates > 0 {
-                    LabeledContent("Already in Tally (skipped)", value: "\(plan.skippedDuplicates)")
+                    LabeledContent("Repeated in overlapping files (skipped)", value: "\(plan.skippedDuplicates)")
                 }
             } header: {
                 Text("Found")
+            } footer: {
+                let fills = plan.exactMerges.filter(\.fillsInBudget).count
+                if !plan.exactMerges.isEmpty {
+                    Text("Payments you already have (from Apple Pay, typed in, or an earlier import) are kept as they are and not added again. They're matched by amount within 3 days, because banks often show a later date.\(fills > 0 ? " \(fills) of them have no budget yet and will get one." : "")")
+                }
+            }
+
+            if !plan.possibleMerges.isEmpty {
+                Section {
+                    ForEach(plan.possibleMerges) { merge in
+                        Toggle(isOn: Binding(
+                            get: { !rejectedMerges.contains(merge.id) },
+                            set: { if $0 { rejectedMerges.remove(merge.id) } else { rejectedMerges.insert(merge.id) } }
+                        )) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Statement: \(merge.transaction.description) · \(Money.format(cents: merge.transaction.cents))")
+                                    .font(.subheadline)
+                                Text("In Tally: \(merge.existing.merchant.isEmpty ? "Payment" : merge.existing.merchant) · \(merge.existing.cents == 0 ? "amount unknown" : Money.format(cents: merge.existing.cents))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(merge.transaction.date.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Same payment?")
+                } footer: {
+                    Text("Same shop, about the same day, different amount: usually a fuel pre-authorisation, a tip, or an amount Apple Pay couldn't read. Switched on: they're merged and the bank's amount is used. Switched off: the statement row is added as a separate payment.")
+                }
             }
 
             Section {
@@ -210,12 +246,12 @@ struct StatementImportView: View {
                     var edited = plan
                     edited.budgets = drafts
                     importer.plan = edited
-                    importer.apply(included: included, importUnmatched: importUnmatched, in: context)
+                    importer.apply(included: included, importUnmatched: importUnmatched, rejectedMerges: rejectedMerges, in: context)
                     UIApplication.shared.isIdleTimerDisabled = false
                 } label: {
                     Text("Import").frame(maxWidth: .infinity).bold()
                 }
-                .disabled(included.isEmpty && !(importUnmatched && !plan.unmatched.isEmpty))
+                .disabled(included.isEmpty && !(importUnmatched && !plan.unmatched.isEmpty) && plan.merges.isEmpty)
             } footer: {
                 Text("Imported payments are marked **Imported**, and you can reassign any of them in History.")
             }
@@ -236,7 +272,16 @@ struct StatementImportView: View {
         Form {
             Section {
                 Label("Import complete", systemImage: "checkmark.seal.fill").foregroundStyle(.green).font(.headline)
-                LabeledContent("Payments imported", value: "\(result.paymentsImported)")
+                LabeledContent("New payments", value: "\(result.paymentsImported)")
+                if result.merged > 0 {
+                    LabeledContent("Merged with payments you had", value: "\(result.merged)")
+                }
+                if result.budgetsFilledIn > 0 {
+                    LabeledContent("Budgets filled in", value: "\(result.budgetsFilledIn)")
+                }
+                if result.amountsUpdated > 0 {
+                    LabeledContent("Amounts corrected", value: "\(result.amountsUpdated)")
+                }
                 if result.budgetsCreated > 0 {
                     LabeledContent("Budgets created", value: "\(result.budgetsCreated)")
                 }
@@ -328,6 +373,7 @@ struct StatementImportView: View {
         included = []
         amountTexts = [:]
         importUnmatched = false
+        rejectedMerges = []
         self.importer = importer
         UIApplication.shared.isIdleTimerDisabled = true
         runTask?.cancel()

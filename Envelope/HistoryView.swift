@@ -191,6 +191,11 @@ struct PaymentRow: View {
                         .foregroundStyle(.secondary)
                 }
                 .font(.caption)
+                if payment.statementMatched && payment.source != .statement {
+                    Label("On bank statement", systemImage: "checkmark.seal")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 if payment.needsReview {
                     Label(payment.note.isEmpty ? "Check this payment" : payment.note, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)

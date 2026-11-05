@@ -64,6 +64,7 @@ enum DataExport {
         let assignedBy: String
         let aiReason: String?
         let aiOriginalBudget: String?
+        let statementMatched: Bool
     }
 
     struct MonthCloseDTO: Encodable {
@@ -152,7 +153,7 @@ enum DataExport {
         "dates": "Fields named *_on and *_date are local calendar dates (YYYY-MM-DD). *_at fields are ISO 8601 timestamps.",
         "savings": "total_zar is the user's savings balance as last entered by hand. set_aside_for_replacements_zar is the sum of all belonging funds. true_savings_zar = total_zar - set_aside_for_replacements_zar, the money not earmarked for anything. monthly_set_aside_zar is what the user should move into savings this month for replacements.",
         "budgets": "Monthly spending budgets. left_this_month_zar = monthly_zar - spent_this_month_zar (negative = over budget). removed_on is set if the user removed the budget; its payments are kept.",
-        "payments": "Every card payment, newest first. budget null = Unassigned (not yet given a budget). source: shortcut = logged automatically from Apple Pay via the iOS Shortcuts Wallet automation, manual = typed in by the user (online purchases, missed payments), test = test payment, import = imported from a bank statement CSV. needs_review = the amount couldn't be read or wasn't in rand. assigned_by: armed = the user armed the budget before paying, manual = the user chose it, ai = an AI model chose it and the user hasn't checked it, aiConfirmed = AI choice confirmed by the user, imported = sorted by AI during a bank statement import the user reviewed, none = unassigned. ai_original_budget = the AI's wrong guess that the user corrected.",
+        "payments": "Every card payment, newest first. budget null = Unassigned (not yet given a budget). source: shortcut = logged automatically from Apple Pay via the iOS Shortcuts Wallet automation, manual = typed in by the user (online purchases, missed payments), test = test payment, import = imported from a bank statement CSV. needs_review = the amount couldn't be read or wasn't in rand. assigned_by: armed = the user armed the budget before paying, manual = the user chose it, ai = an AI model chose it and the user hasn't checked it, aiConfirmed = AI choice confirmed by the user, imported = sorted by AI during a bank statement import the user reviewed, none = unassigned. ai_original_budget = the AI's wrong guess that the user corrected. statement_matched = the payment also appears on an imported bank statement.",
         "month_closes": "Months the user closed. For each budget: what was left. to_save_zar = max(0, total_left_zar - unassigned_zar), the suggested amount to move to savings. moved_to_savings_zar = what the user said they actually moved. to_replacement_funds_zar = the part of that set aside for belongings; the rest is true savings.",
         "belongings": "Things the user owns and plans to replace. The user saves monthly into a fund per belonging so the replacement is paid for when it wears out.",
         "belongings.current": "The unit owned now. lifespan_source: custom = user's estimate, previous = how long the previous unit actually lasted, typical = built-in rough category average. monthly_contribution_zar = (replacement_target_zar - fund balance) / months_of_contributions_left, rounded up to the cent. plan_status: saving | funded | due (expected date reached but fund short).",
@@ -214,7 +215,8 @@ enum DataExport {
                     needsReview: p.needsReview,
                     assignedBy: p.assignment == .unassigned ? "none" : p.assignment.rawValue,
                     aiReason: p.aiReason.isEmpty ? nil : p.aiReason,
-                    aiOriginalBudget: p.aiOriginalBudgetName.isEmpty ? nil : p.aiOriginalBudgetName
+                    aiOriginalBudget: p.aiOriginalBudgetName.isEmpty ? nil : p.aiOriginalBudgetName,
+                    statementMatched: p.statementMatched
                 )
             },
             monthCloses: closes.map { c in
