@@ -8,7 +8,7 @@ import SwiftData
 enum AutoCategorizer {
     /// Below this the payment stays Unassigned for you to sort.
     static let confidenceThreshold = 0.6
-    static let historyLimit = 80
+    nonisolated static let historyLimit = 80
 
     struct Suggestion: Equatable {
         let budgetName: String
