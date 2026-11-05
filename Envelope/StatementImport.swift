@@ -210,7 +210,7 @@ enum StatementImport {
     // MARK: Extraction
 
     static let extractionSystem = """
-    You extract transactions from a South African bank statement (a CSV export or a PDF statement) for Tally, a personal budgeting app. Amounts are in rand.
+    You extract transactions from a South African bank statement (a CSV export or a PDF statement) for Spaar, a personal budgeting app. Amounts are in rand.
     Return every real transaction in the part you are given, in order, each exactly once. Skip headers, opening/closing balance lines, running balance columns, summaries, fee and interest tables, and adverts.
     In a PDF, use the debit/credit columns or signs to tell money out from money in. A transaction that continues onto the next page is only listed once.
     For each transaction:
@@ -335,7 +335,7 @@ enum StatementImport {
     }
 
     static let budgetSystem = """
-    You set up monthly budgets for a person in South Africa (amounts in rand) in Tally, a budgeting app, based on their past spending.
+    You set up monthly budgets for a person in South Africa (amounts in rand) in Spaar, a budgeting app, based on their past spending.
     Propose between 4 and 10 budgets with short, friendly names (one or two words, e.g. Groceries, Eating out, Fuel, Bills, Fun).
     Group small or related categories together. Every spending category you are given must belong to exactly one budget.
     monthly_amount: what they typically spend on it per month, ignoring rare one-off large purchases, rounded up to the nearest 50, as text with two decimals (e.g. "3250.00").
@@ -402,7 +402,7 @@ enum StatementImport {
 
     // MARK: Plan
 
-    /// A payment already in Tally, as the matcher sees it.
+    /// A payment already in Spaar, as the matcher sees it.
     struct ExistingPayment: Equatable {
         let id: UUID
         let date: Date
@@ -421,7 +421,7 @@ enum StatementImport {
         let budgetKey: String?
     }
 
-    /// A statement row that is the same payment as one already in Tally
+    /// A statement row that is the same payment as one already in Spaar
     /// (logged by Apple Pay, typed in, or from an earlier import). It's merged
     /// into that payment instead of being added again.
     struct PlannedMerge: Equatable, Identifiable {
@@ -480,7 +480,7 @@ enum StatementImport {
     /// 1. Keeps spending only, and drops rows repeated across overlapping files
     ///    (a row counts as many times as it appears in any one file, so two
     ///    identical coffees on one day in one statement are both kept).
-    /// 2. Matches rows to payments already in Tally, one to one (see
+    /// 2. Matches rows to payments already in Spaar, one to one (see
     ///    `matchExisting`). Matched rows are merged, never added again, so
     ///    importing the same statement twice, or a statement covering months
     ///    Apple Pay already logged, creates no duplicates.
@@ -517,7 +517,7 @@ enum StatementImport {
         // Overlapping files (a CSV and a PDF of the same month, or two
         // exports that overlap): each file's rows are matched against the
         // rows already kept from earlier files with the same rules as for
-        // payments in Tally, and exact matches are dropped. Rows within one
+        // payments in Spaar, and exact matches are dropped. Rows within one
         // file are never compared, so two identical coffees are both kept.
         // Only the strict rules apply here (same amount and shop within 3
         // days, or same amount on the same day when a name is cryptic), and

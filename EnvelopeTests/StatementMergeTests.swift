@@ -11,7 +11,7 @@ private final class CannedClient: LLMJSONCompleting {
     }
 }
 
-/// Importing statements on top of payments Tally already has (from Apple
+/// Importing statements on top of payments Spaar already has (from Apple
 /// Pay, typed in, or an earlier import): merged, never duplicated.
 @MainActor
 final class StatementMergeTests: XCTestCase {

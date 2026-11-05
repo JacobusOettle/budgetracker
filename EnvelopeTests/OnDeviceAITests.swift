@@ -128,7 +128,7 @@ final class OnDeviceAITests: XCTestCase {
         let busy = try PaymentProcessor.process(amountText: "R 10.00", merchant: "Spar", card: "", source: .shortcut,
                                                 now: TestCalendar.date(2026, 10, 1), in: context, calendar: cal).payment
         _ = await AutoCategorizer.categorize(busy, client: ThrowingClient(error: LLMError.temporarilyUnavailable("busy")), in: context, calendar: cal)
-        XCTAssertFalse(busy.aiAttempted, "throttled in the background: retried when Tally opens")
+        XCTAssertFalse(busy.aiAttempted, "throttled in the background: retried when Spaar opens")
 
         let badKey = try PaymentProcessor.process(amountText: "R 20.00", merchant: "Engen", card: "", source: .shortcut,
                                                   now: TestCalendar.date(2026, 10, 2), in: context, calendar: cal).payment

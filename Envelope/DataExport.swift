@@ -21,7 +21,7 @@ enum DataExport {
     /// Writes the export to a temporary file and returns its URL for sharing.
     static func writeFile(context: ModelContext, now: Date = .now) throws -> URL {
         let data = try makeJSON(context: context, now: now)
-        let name = "tally-export-\(dayString(now, calendar: .current)).json"
+        let name = "spaar-export-\(dayString(now, calendar: .current)).json"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try data.write(to: url, options: .atomic)
         return url
@@ -148,7 +148,7 @@ enum DataExport {
     }
 
     static let about: [String: String] = [
-        "purpose": "Export from Tally, a personal budgeting app for an iPhone user in South Africa. The user arms a budget before paying with Apple Pay; the payment is then logged to it. No bank connection: payments come from Apple Pay via iOS Shortcuts or are entered by hand.",
+        "purpose": "Export from Spaar, a personal budgeting app for an iPhone user in South Africa. The user arms a budget before paying with Apple Pay; the payment is then logged to it. No bank connection: payments come from Apple Pay via iOS Shortcuts or are entered by hand.",
         "money": "All *_zar fields are exact decimal strings in South African rand (ZAR), e.g. \"24000.00\". Negative means money out.",
         "dates": "Fields named *_on and *_date are local calendar dates (YYYY-MM-DD). *_at fields are ISO 8601 timestamps.",
         "savings": "total_zar is the user's savings balance as last entered by hand. set_aside_for_replacements_zar is the sum of all belonging funds. true_savings_zar = total_zar - set_aside_for_replacements_zar, the money not earmarked for anything. monthly_set_aside_zar is what the user should move into savings this month for replacements.",
@@ -187,7 +187,7 @@ enum DataExport {
 
         return Document(
             about: about,
-            app: "Tally",
+            app: "Spaar",
             schemaVersion: schemaVersion,
             exportedAt: timestamp(now),
             currency: "ZAR",

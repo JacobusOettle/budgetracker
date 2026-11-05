@@ -1,16 +1,16 @@
-# Tally
+# Spaar
 
-Tally is an iPhone budgeting app for rand. Tap a budget, such as Food, just
+Spaar (Afrikaans for "save") is an iPhone budgeting app for rand. Tap a budget, such as Food, just
 before you pay with Apple Pay. An iOS Shortcuts **Wallet** automation then tells
-Tally about the payment, and it's logged to that budget. Tally never connects
+Spaar about the payment, and it's logged to that budget. Spaar never connects
 to a bank, has no account or analytics, and all data stays on the phone.
 
-> **About the name.** The app is called **Tally** on your home screen, in Shortcuts and in
+> **About the name.** The app is called **Spaar** on your home screen, in Shortcuts and in
 > notifications. Inside the code, the Xcode project, folders and bundle ID
 > (`com.jacobusoettle.envelope`) keep the old working name "Envelope", so your data and
 > your existing Shortcuts automation carry on working after an update.
 
-## Using Tally
+## Using Spaar
 
 **Budgets tab (home)**
 - **Left this month** at the top is the total across all budgets: what you can move
@@ -20,7 +20,7 @@ to a bank, has no account or analytics, and all data stays on the phone.
   The amount turns orange when 20% or less is left and red when it's empty or over.
 - **Tap a budget to arm it** for **10 minutes**, with a countdown, or until a payment
   arrives. Tap it again to disarm. If it's low or empty, the row says so clearly
-  (**Tally can't block a payment**).
+  (**Spaar can't block a payment**).
 - **Long-press** a budget to edit or recolour it, see its payments, move it up or
   down, or remove it. You can also drag to reorder with **Reorder** (top left).
 - Until the first Apple Pay payment arrives, a banner offers **Set up automatic Apple
@@ -57,7 +57,7 @@ payment path with R12.34), the daily **missed-payment reminder** (on by default 
 ## AI categorisation (optional)
 
 **Settings → Auto-categorise with AI.** When a payment arrives and no budget is armed,
-Tally can ask an AI model which budget it belongs to.
+Spaar can ask an AI model which budget it belongs to.
 
 - **Apple Intelligence is the default** on iOS 26 Apple Intelligence iPhones (15 Pro
   or newer, with Apple Intelligence switched on). Auto-categorise is on out of the
@@ -67,7 +67,7 @@ Tally can ask an AI model which budget it belongs to.
   - Apple's model is small (about 4 096 tokens of context), so it sees your last 25
     sorted payments plus your corrections.
   - When the phone is busy, Apple may hold it back in the background. The payment
-    then stays Unassigned and is sorted when you open Tally.
+    then stays Unassigned and is sorted when you open Spaar.
 - **The cloud provider is set up separately** and is always used for statement
   imports, which are too big for the on-device model.
 - **Works with any provider.** Presets cover Claude (Anthropic), OpenAI, OpenRouter
@@ -103,12 +103,12 @@ categorisation set up.
 1. Pick your **PDF statements** (emailed or downloaded from FNB or Capitec) and/or
    **CSV** transaction exports. You can pick several files, for example one per month,
    account or year. The limits are 200 pages per PDF and 6 000 rows per CSV.
-   - **Password-protected PDFs:** banks usually lock emailed statements. Tally asks
+   - **Password-protected PDFs:** banks usually lock emailed statements. Spaar asks
      for the password and unlocks the file on the phone. Only an unlocked copy of the
      pages goes to the AI, and the password never leaves the phone.
    - **With Claude:** the PDF pages themselves are sent, 3 pages per request, as
      Anthropic `document` blocks. Claude reads layout and scanned pages.
-   - **With other providers:** Tally extracts the PDF's text on the phone and sends
+   - **With other providers:** Spaar extracts the PDF's text on the phone and sends
      that. Scanned, image-only PDFs need Claude, or use a CSV instead.
    - **CSV files** are sent in parts of 120 rows, with the header repeated in each part.
 2. Each part goes to your AI provider, asking it to **extract the transactions**. For each one it
@@ -125,7 +125,7 @@ categorisation set up.
 5. **What gets imported:**
    - **Spending only.** Income, transfers between your own accounts and refunds are
      skipped.
-   - **Duplicates are handled.** Each payment Tally already has cancels out one
+   - **Duplicates are handled.** Each payment Spaar already has cancels out one
      statement row on the same day for the same amount, so re-importing is safe.
      Rows repeated across overlapping files count once, but identical purchases in
      one statement are all kept.
@@ -133,12 +133,12 @@ categorisation set up.
      reassigned in History, and corrections teach the AI. New budgets start in the
      month of their first imported payment, so past months add up.
    - **Month End.** It still only reminds you about months from when you started
-     using Tally.
+     using Spaar.
    - **Unmatched payments.** Payments that fit no budget are only imported, as
      Unassigned, if you choose that.
 
 **Importing again, or on top of Apple Pay payments (merge, no duplicates):**
-- Each statement row is matched to at most one payment Tally already has: from Apple
+- Each statement row is matched to at most one payment Spaar already has: from Apple
   Pay, typed in, or an earlier import.
   - **Merged automatically:** the same amount at the same shop within 3 days (banks
     often show a later posting date), or the same amount within 1 day when the bank's
@@ -160,7 +160,7 @@ categorisation set up.
   purchases inside one statement are both kept.
 
 **Privacy:** the whole statement goes to your AI provider, including descriptions,
-balances and anything else in it, such as your name, address and account number. Keep Tally open while
+balances and anything else in it, such as your name, address and account number. Keep Spaar open while
 it runs. Closing the screen stops it.
 
 Apple Wallet's own history can't be imported. Apple doesn't give apps access to it
@@ -238,11 +238,11 @@ only leaves your phone when you share it.
 Budgets tab. It works with **any card from any bank** in Apple Wallet.
 
 iOS doesn't let apps create Shortcuts automations themselves. Other Wallet-logging
-apps (CashJot, WalletPal, Moneko) also make you build it by hand. Tally makes it as
+apps (CashJot, WalletPal, Moneko) also make you build it by hand. Spaar makes it as
 short as possible:
-- **Quick setup** appears once `TallyLinks.logPaymentShortcut` holds an iCloud link
-  to a shared "Log to Tally" shortcut. You tap **Add Shortcut**, then in Shortcuts go
-  Automation → + → Wallet → Any card → Run Immediately → pick **Log to Tally**. No
+- **Quick setup** appears once `SpaarLinks.logPaymentShortcut` holds an iCloud link
+  to a shared "Log to Spaar" shortcut. You tap **Add Shortcut**, then in Shortcuts go
+  Automation → + → Wallet → Any card → Run Immediately → pick **Log to Spaar**. No
   field mapping is needed.
 - **By hand** (shown until that link exists) are the steps below.
 - **Live check:** the setup screen shows "Working" with the time of the last Apple

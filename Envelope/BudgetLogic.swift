@@ -82,7 +82,7 @@ struct MonthEndSummary: Equatable {
     var toSaveCents: Int { max(0, totalLeftCents - unassignedCents) }
 }
 
-/// The month you started using Tally. Month End only reminds you about
+/// The month you started using Spaar. Month End only reminds you about
 /// months from then on, so importing a past statement (which backdates
 /// budgets) doesn't ask you to close a year of old months.
 enum UsageStart {

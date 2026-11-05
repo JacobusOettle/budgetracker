@@ -8,7 +8,7 @@ import FoundationModels
 ///
 /// Its context is about 4 096 tokens, so it gets a shorter payment history
 /// than cloud models. In the background Apple may throttle it when the phone
-/// is busy; such payments stay Unassigned and are retried when Tally opens.
+/// is busy; such payments stay Unassigned and are retried when Spaar opens.
 enum OnDeviceAI {
     /// nil when ready, otherwise why it can't be used.
     static var unavailableReason: String? {
@@ -32,7 +32,7 @@ enum OnDeviceAI {
         }
         return "Needs iOS 26 or later."
         #else
-        return "This build of Tally doesn't include Apple Intelligence support."
+        return "This build of Spaar doesn't include Apple Intelligence support."
         #endif
     }
 

@@ -73,7 +73,7 @@ struct StatementImportView: View {
                 Text("Load your past spending from a bank statement, and let the AI set up budgets for you.")
                 Text("Use the **PDF statements** your bank emails you or that you download from FNB or Capitec online banking, or a **CSV** transaction export. A few months to a year works best. You can pick more than one file.")
                     .foregroundStyle(.secondary)
-                Text("Password-protected statements are fine: Tally asks for the password and unlocks the file on your phone. The password is never sent anywhere.")
+                Text("Password-protected statements are fine: Spaar asks for the password and unlocks the file on your phone. The password is never sent anywhere.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -95,7 +95,7 @@ struct StatementImportView: View {
                     Text(fileError).foregroundStyle(.red).font(.footnote)
                 }
             } footer: {
-                Text("Privacy: the statement goes to the AI provider you chose, including descriptions, amounts, balances and anything else in it, such as your name, address and account number. Remove anything you don't want to share before importing. Keep Tally open while it works. A year of transactions can take a few minutes.")
+                Text("Privacy: the statement goes to the AI provider you chose, including descriptions, amounts, balances and anything else in it, such as your name, address and account number. Remove anything you don't want to share before importing. Keep Spaar open while it works. A year of transactions can take a few minutes.")
             }
         }
         .onAppear { aiReady = StatementImporter.fromSettings() != nil }
@@ -114,7 +114,7 @@ struct StatementImportView: View {
                     .padding(.horizontal, 40)
                 Text("Reading part \(part) of \(total)…").font(.headline)
                 Text("\(found) transactions found so far").foregroundStyle(.secondary)
-                Text("Keep Tally open.").font(.footnote).foregroundStyle(.secondary)
+                Text("Keep Spaar open.").font(.footnote).foregroundStyle(.secondary)
             }
         case .proposing:
             VStack(spacing: 16) {
@@ -153,7 +153,7 @@ struct StatementImportView: View {
                 }
                 LabeledContent("New payments", value: "\(plan.payments.count)")
                 if !plan.exactMerges.isEmpty {
-                    LabeledContent("Already in Tally (merged)", value: "\(plan.exactMerges.count)")
+                    LabeledContent("Already in Spaar (merged)", value: "\(plan.exactMerges.count)")
                 }
                 if plan.skippedNotSpending > 0 {
                     LabeledContent("Income & transfers (skipped)", value: "\(plan.skippedNotSpending)")
@@ -180,7 +180,7 @@ struct StatementImportView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("Statement: \(merge.transaction.description) · \(Money.format(cents: merge.transaction.cents))")
                                     .font(.subheadline)
-                                Text("In Tally: \(merge.existing.merchant.isEmpty ? "Payment" : merge.existing.merchant) · \(merge.existing.cents == 0 ? "amount unknown" : Money.format(cents: merge.existing.cents))")
+                                Text("In Spaar: \(merge.existing.merchant.isEmpty ? "Payment" : merge.existing.merchant) · \(merge.existing.cents == 0 ? "amount unknown" : Money.format(cents: merge.existing.cents))")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                 Text(merge.transaction.date.formatted(date: .abbreviated, time: .omitted))

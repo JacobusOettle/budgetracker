@@ -178,7 +178,7 @@ struct BudgetsHomeView: View {
                         perform { try BudgetService.move(fromOffsets: from, toOffset: to, in: context) }
                     }
                 } footer: {
-                    Text("Tap a budget just before you pay. The next payment in the following 10 minutes is logged to it. Tally can't block or change a payment. Long-press a budget to edit, recolour or move it.")
+                    Text("Tap a budget just before you pay. The next payment in the following 10 minutes is logged to it. Spaar can't block or change a payment. Long-press a budget to edit, recolour or move it.")
                 }
             }
         }
@@ -301,10 +301,10 @@ struct BudgetCard: View {
         case .none:
             return "Pay now. The next payment goes to \(budget.name). Tap again to disarm."
         case .low:
-            return "Only \(Money.format(cents: left)) left. If you pay more, the payment still goes through: Tally can't stop it."
+            return "Only \(Money.format(cents: left)) left. If you pay more, the payment still goes through: Spaar can't stop it."
         case .empty:
             let state = left == 0 ? "is empty" : "is \(Money.format(cents: -left)) over budget"
-            return "\(budget.name) \(state). The payment still goes through: Tally can't stop it."
+            return "\(budget.name) \(state). The payment still goes through: Spaar can't stop it."
         }
     }
 }

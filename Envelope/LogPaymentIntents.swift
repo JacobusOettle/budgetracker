@@ -11,7 +11,7 @@ import Foundation
 struct LogPaymentIntent: AppIntent {
     static var title: LocalizedStringResource = "Log Payment"
     static var description = IntentDescription(
-        "Logs a card payment to the budget you armed in Tally, or (if AI is set up) to the budget the AI picks, otherwise as Unassigned. Use it in a Shortcuts Wallet automation: set Amount, Merchant and Card from Shortcut Input."
+        "Logs a card payment to the budget you armed in Spaar, or (if AI is set up) to the budget the AI picks, otherwise as Unassigned. Use it in a Shortcuts Wallet automation: set Amount, Merchant and Card from Shortcut Input."
     )
     static var openAppWhenRun: Bool = false
 

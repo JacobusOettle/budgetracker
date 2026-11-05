@@ -9,7 +9,7 @@ struct ExportView: View {
     var body: some View {
         List {
             Section {
-                Text("Exports everything in Tally as one JSON file: budgets, payments, month-ends, savings, belongings and replacement funds.")
+                Text("Exports everything in Spaar as one JSON file: budgets, payments, month-ends, savings, belongings and replacement funds.")
                 Text("It's written to be read by an AI assistant. Amounts are exact rand values, and the file starts with an \"about\" section explaining every field. Attach it to a chat and ask your questions.")
                     .foregroundStyle(.secondary)
             }

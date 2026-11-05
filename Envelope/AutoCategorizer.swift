@@ -52,7 +52,7 @@ enum AutoCategorizer {
     // MARK: Prompt
 
     static let systemPrompt = """
-    You sort card payments into a person's monthly budgets for Tally, a budgeting app in South Africa (amounts in rand).
+    You sort card payments into a person's monthly budgets for Spaar, a budgeting app in South Africa (amounts in rand).
     Pick the single budget the payment most likely belongs to.
     Use how this person sorted the same or similar merchants before; their corrections of earlier AI guesses matter most.
     If nothing fits well, or you are unsure, answer with an empty budget.

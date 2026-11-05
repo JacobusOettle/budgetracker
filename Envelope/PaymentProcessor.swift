@@ -94,7 +94,7 @@ enum PaymentProcessor {
             ? "\(Money.format(cents: left)) left."
             : "\(Money.format(cents: -left)) over budget."
         return ("\(Money.format(cents: payment.amountCents)) → \(budget.name) (auto)",
-                "\(payment.displayMerchant). \(status) Wrong? Change it in Tally.")
+                "\(payment.displayMerchant). \(status) Wrong? Change it in Spaar.")
     }
 
     /// The notification to show for an outcome. nil for duplicates.
@@ -104,7 +104,7 @@ enum PaymentProcessor {
             return nil
         case let .assigned(payment, budget, left):
             if payment.needsReview {
-                return ("Check payment in \(budget.name)", "\(payment.displayMerchant): \(payment.note) Open Tally to fix it.")
+                return ("Check payment in \(budget.name)", "\(payment.displayMerchant): \(payment.note) Open Spaar to fix it.")
             }
             let status = left >= 0
                 ? "\(Money.format(cents: left)) left in \(budget.name) this month."
@@ -112,9 +112,9 @@ enum PaymentProcessor {
             return ("\(Money.format(cents: payment.amountCents)) → \(budget.name)", "\(payment.displayMerchant). \(status)")
         case let .unassigned(payment):
             if payment.needsReview {
-                return ("Check a payment", "\(payment.displayMerchant): \(payment.note) Open Tally to fix and assign it.")
+                return ("Check a payment", "\(payment.displayMerchant): \(payment.note) Open Spaar to fix and assign it.")
             }
-            return ("Assign \(Money.format(cents: payment.amountCents))", "\(payment.displayMerchant). No budget was armed. Open Tally to assign it.")
+            return ("Assign \(Money.format(cents: payment.amountCents))", "\(payment.displayMerchant). No budget was armed. Open Spaar to assign it.")
         }
     }
 }

@@ -40,7 +40,7 @@ enum LLMError: LocalizedError, Equatable {
         case .refused: "The model declined to answer."
         case .emptyResponse: "The AI provider returned no text."
         case .truncated: "The AI's answer was cut off because it was too long."
-        case .temporarilyUnavailable(let why): "The AI isn't available right now (\(why)). Tally will try again later."
+        case .temporarilyUnavailable(let why): "The AI isn't available right now (\(why)). Spaar will try again later."
         }
     }
 }

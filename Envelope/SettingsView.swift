@@ -44,7 +44,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Text("Everything stays on this iPhone unless you use a cloud AI provider (Apple Intelligence runs on the phone). Tally has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
+                    Text("Everything stays on this iPhone unless you use a cloud AI provider (Apple Intelligence runs on the phone). Spaar has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -116,9 +116,9 @@ struct TestPaymentButton: View {
     }
 }
 
-/// Sets up the Shortcuts automation that tells Tally about Apple Pay taps.
+/// Sets up the Shortcuts automation that tells Spaar about Apple Pay taps.
 /// iOS doesn't let apps create automations themselves, so this makes it as
-/// short as possible: a ready-made "Log to Tally" shortcut added with one tap,
+/// short as possible: a ready-made "Log to Spaar" shortcut added with one tap,
 /// then a few taps in Shortcuts, and a live check that it works.
 struct SetupGuideView: View {
     @Environment(\.openURL) private var openURL
@@ -139,15 +139,15 @@ struct SetupGuideView: View {
                         .foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("After you pay with Apple Pay, with any card from any bank, an iPhone Shortcuts automation tells Tally the amount, shop and card. iOS doesn't let apps create automations themselves, so it takes a minute to set up once.")
+                Text("After you pay with Apple Pay, with any card from any bank, an iPhone Shortcuts automation tells Spaar the amount, shop and card. iOS doesn't let apps create automations themselves, so it takes a minute to set up once.")
             }
 
-            if let link = TallyLinks.logPaymentShortcut {
+            if let link = SpaarLinks.logPaymentShortcut {
                 Section {
                     Button {
                         openURL(link)
                     } label: {
-                        Label("Add the “Log to Tally” shortcut", systemImage: "plus.square.on.square")
+                        Label("Add the “Log to Spaar” shortcut", systemImage: "plus.square.on.square")
                     }
                 } header: {
                     Text("1. Add the shortcut")
@@ -165,7 +165,7 @@ struct SetupGuideView: View {
                     step(2, "Tap **Wallet** (called **Transaction** on older iOS).")
                     step(3, "Under **When I tap**, choose **Any card**, or tick all your cards.")
                     step(4, "Choose **Run Immediately**, then **Next**.")
-                    step(5, "Tap **Log to Tally** in the list. Done.")
+                    step(5, "Tap **Log to Spaar** in the list. Done.")
                 } header: {
                     Text("2. Turn it on for every tap")
                 }
@@ -193,7 +193,7 @@ struct SetupGuideView: View {
             } header: {
                 Text("Check it")
             } footer: {
-                Text("The test runs inside Tally. To check the automation, make a small real Apple Pay payment: the ▶︎ button in Shortcuts sends no payment details.")
+                Text("The test runs inside Spaar. To check the automation, make a small real Apple Pay payment: the ▶︎ button in Shortcuts sends no payment details.")
             }
 
             Section("Good to know") {
@@ -213,7 +213,7 @@ struct SetupGuideView: View {
         step(2, "Tap **Wallet** (called **Transaction** on older iOS).")
         step(3, "Under **When I tap**, choose **Any card**, or tick all your cards. Leave categories and merchants as they are.")
         step(4, "Choose **Run Immediately**, then **Next**, then **New Blank Automation**.")
-        step(5, "Search **Tally** and tap **Log Payment**.")
+        step(5, "Search **Spaar** and tap **Log Payment**.")
         step(6, "Tap **Amount** → **Shortcut Input** above the keyboard → tap the blue bubble → **Amount**.")
         step(7, "Do the same for **Merchant** (→ **Merchant**) and, under **›**, **Card** (→ **Card or Pass**).")
         step(8, "Switch **Show When Run** off and save.")
