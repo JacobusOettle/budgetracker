@@ -115,7 +115,7 @@ struct PaymentsListView: View {
 
     private func autoSort() async {
         guard let client = AutoCategorizer.clientFromSettings() else {
-            sortMessage = "Set up an AI provider and API key in Settings first."
+            sortMessage = AutoCategorizer.clientUnavailableMessage()
             return
         }
         sorting = true
@@ -341,7 +341,7 @@ struct PaymentFormView: View {
     private func suggest() async {
         guard let payment else { return }
         guard let client = AutoCategorizer.clientFromSettings() else {
-            suggestMessage = "Set up an AI provider and API key in Settings first."
+            suggestMessage = AutoCategorizer.clientUnavailableMessage()
             return
         }
         suggesting = true

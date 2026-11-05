@@ -33,6 +33,16 @@ enum AutoCategorizer {
         return HTTPLLMClient(config: config, apiKey: key)
     }
 
+    /// Why there's no client, for a message on screen.
+    static func clientUnavailableMessage() -> String {
+        let config = AIConfig.load()
+        if config.isOnDevice {
+            guard config.enabled else { return "Turn on auto-categorise in Settings → Auto-categorise with AI." }
+            return OnDeviceAI.unavailableReason ?? "Apple Intelligence isn't available right now."
+        }
+        return "Set up an AI provider and API key in Settings first."
+    }
+
     // MARK: Prompt
 
     static let systemPrompt = """
@@ -189,7 +199,10 @@ enum AutoCategorizer {
             .filter { $0.budget == nil && (retryAll || !$0.aiAttempted) }
         var assigned = 0
         for payment in pending.prefix(50) {
-            if case .assigned = await categorize(payment, client: client, in: context) { assigned += 1 }
+            let result = await categorize(payment, client: client, in: context)
+            if case .assigned = result { assigned += 1 }
+            // Busy or offline: stop here and leave the rest for next time.
+            if case .failed = result, !payment.aiAttempted { break }
         }
         return assigned
     }

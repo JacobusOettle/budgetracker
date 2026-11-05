@@ -106,3 +106,44 @@ final class OnDeviceAITests: XCTestCase {
         XCTAssertFalse(AutoCategorizer.isTransient(LLMError.refused))
     }
 }
+
+@MainActor
+final class OnDeviceMessagesTests: XCTestCase {
+    func testMessageNamesTheRealProblem() {
+        let saved = UserDefaults.standard.data(forKey: AIConfig.defaultsKey)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: AIConfig.defaultsKey) }
+            else { UserDefaults.standard.removeObject(forKey: AIConfig.defaultsKey) }
+        }
+        var config = AIConfig()
+        config.apply(AIPreset.named("apple"))
+        config.enabled = true
+        config.save()
+        XCTAssertFalse(AutoCategorizer.clientUnavailableMessage().contains("API key"))
+        config.apply(AIPreset.named("anthropic"))
+        config.save()
+        XCTAssertTrue(AutoCategorizer.clientUnavailableMessage().contains("API key"))
+    }
+
+    func testBatchStopsWhenTheModelIsBusy() async throws {
+        struct Busy: LLMCompleting {
+            final class Counter { var calls = 0 }
+            let counter = Counter()
+            func complete(_ prompt: CategorizationPrompt) async throws -> String {
+                counter.calls += 1
+                throw LLMError.temporarilyUnavailable("busy")
+            }
+        }
+        let container = try Persistence.inMemory()
+        let context = container.mainContext
+        _ = try BudgetService.addBudget(name: "Food", monthlyCents: 1, in: context)
+        for i in 0..<3 {
+            _ = try PaymentProcessor.process(amountText: "R \(i + 1).00", merchant: "Shop \(i)", card: "", source: .shortcut,
+                                             now: TestCalendar.date(2026, 10, 1 + i), in: context)
+        }
+        let busy = Busy()
+        let assigned = await AutoCategorizer.categorizePending(client: busy, in: context)
+        XCTAssertEqual(assigned, 0)
+        XCTAssertEqual(busy.counter.calls, 1, "stops after the first busy answer")
+    }
+}
