@@ -13,16 +13,19 @@ to a bank, has no account or analytics, and all data stays on the phone.
 ## Using Tally
 
 **Budgets tab (home)**
-- Each budget shows **what's left this month** in rand. The amount turns orange
-  when 20% or less is left and red when it's empty or over budget.
-- **Tap a budget to arm it.** It stays armed for **10 minutes**, with a countdown,
-  or until a payment arrives. Tap it again to disarm. Arming one budget disarms
-  the others.
-- If the armed budget is low or empty, the card says so clearly. **Envelope can't
-  block a payment**, and the app never implies it can.
-- The **+** menu has New budget, Add a payment and Month end. **Long-press** a
-  budget to edit it, see its payments or remove it. A removed budget with payments
-  is archived, so history and past months still add up.
+- **Left this month** at the top is the total across all budgets: what you can move
+  to savings at month end if you spend nothing more. It's the same sum as Month End,
+  after unassigned spending.
+- Budgets are **square tiles, two per row**, each in a colour you choose. A tile is
+  completely filled when the whole month's amount is left and **drains as you
+  spend**: half filled at 50%, empty at 0. The border turns orange when 20% or less
+  is left and red when the budget is empty or over.
+- **Tap a tile to arm it** for **10 minutes**. A banner shows the countdown, plus a
+  clear warning when the budget is low or empty (**Tally can't block a payment**).
+  Tap it again to disarm. Arming one budget disarms the others.
+- **Long-press a tile** to edit it or change its colour, see its payments, move it
+  earlier or later, or remove it. You can also **drag a tile onto another** to
+  reorder them.
 
 **When a payment arrives** (from the automation):
 1. **Armed budget:** the payment is logged there and the budget disarms. You get a
@@ -123,6 +126,28 @@ categorisation set up.
      using Tally.
    - **Unmatched payments.** Payments that fit no budget are only imported, as
      Unassigned, if you choose that.
+
+**Importing again, or on top of Apple Pay payments (merge, no duplicates):**
+- Each statement row is matched to at most one payment Tally already has: from Apple
+  Pay, typed in, or an earlier import.
+  - **Merged automatically:** the same amount at the same shop within 3 days (banks
+    often show a later posting date), or the same amount within 1 day when the bank's
+    description is too cryptic to compare (e.g. "POS 4567*1234 CPT").
+  - **What merging does:** your payment is kept with its budget, armed choice and
+    exact time, and marked "On bank statement". If it had no budget, it gets the
+    statement's.
+- **Same payment?** list on the review screen:
+  - **Same shop, different amount** (fuel pre-authorisation, tip, or an amount Apple
+    Pay couldn't read): merged by default, using the bank's amount.
+  - **Same amount, clearly different shop** (maybe your other card): kept separate
+    by default.
+  - You can flip either.
+- **Re-importing** the same or an overlapping statement adds nothing twice. Payments
+  that came from a statement only match the same amount, so next month's purchase at
+  the same shop isn't merged into last month's.
+- **Several files in one import** (e.g. the CSV and the PDF of the same month) are
+  de-duplicated against each other where their dates overlap. Two identical
+  purchases inside one statement are both kept.
 
 **Privacy:** the whole statement goes to your AI provider, including descriptions,
 balances and anything else in it, such as your name, address and account number. Keep Tally open while
