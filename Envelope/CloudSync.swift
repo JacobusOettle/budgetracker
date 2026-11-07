@@ -95,7 +95,7 @@ final class CloudSyncMonitor {
         let account = NotificationCenter.default.addObserver(
             forName: .CKAccountChanged, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { Task { await self?.refreshAccount() } }
+            Task { @MainActor in await self?.refreshAccount() }
         }
         observers = [events, account]
         Task { await refreshAccount() }
