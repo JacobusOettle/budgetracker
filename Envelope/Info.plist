@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Name shown everywhere (also set as CFBundleDisplayName in project.yml). -->
+	<key>CFBundleName</key>
+	<string>Spaar</string>
 	<!-- Allows plain-http calls to an AI model on the local network (Ollama, LM Studio).
 	     Internet providers still require HTTPS. -->
 	<key>NSAppTransportSecurity</key>

@@ -311,7 +311,7 @@ Xcode again. A paid Apple Developer account ($99/yr) gives you a year.
 
 ### Option B: No Mac. Use the CI-built unsigned IPA plus Sideloadly (Windows or Mac)
 1. On GitHub, open **Actions → iOS build**, open the latest green run, and download
-   the **Envelope-ipa** artifact. Unzip it to get `Envelope-unsigned.ipa`.
+   the **Spaar-ipa** artifact. Unzip it to get `Spaar-unsigned.ipa`.
 2. Install [Sideloadly](https://sideloadly.io) on a Windows PC or Mac. On Windows
    it also needs iTunes and iCloud from Apple's site, not the Microsoft Store.
 3. Connect the iPhone by USB, drag the IPA into Sideloadly, enter your Apple ID,
@@ -345,7 +345,7 @@ or Finder (drag it onto the phone).
 3. Builds an unsigned Release `.ipa` and checks that the App Intents metadata is
    in the bundle. Without it, the actions wouldn't appear in Shortcuts.
 4. If the signing secrets exist, archives and exports a signed `.ipa`.
-5. Uploads the IPA(s) as the `Envelope-ipa` artifact and the test results as `test-results`.
+5. Uploads the IPA(s) as the `Spaar-ipa` artifact and the test results as `test-results`.
 
 ## Project layout and conventions
 - Swift, SwiftUI, SwiftData and App Intents. Deployment target is **iOS 17.0**,

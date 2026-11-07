@@ -39,6 +39,7 @@ xcodebuild archive \
   -project Envelope.xcodeproj \
   -scheme Envelope \
   -configuration Release \
+  CURRENT_PROJECT_VERSION="${BUILD_NUMBER:-1}" \
   -destination 'generic/platform=iOS' \
   -archivePath build/Envelope.xcarchive \
   CODE_SIGN_STYLE=Manual \
@@ -67,5 +68,5 @@ xcodebuild -exportArchive \
   -archivePath build/Envelope.xcarchive \
   -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
   -exportPath build/export
-mv build/export/*.ipa "$OUT/Envelope-signed.ipa"
-echo "Built $OUT/Envelope-signed.ipa"
+mv build/export/*.ipa "$OUT/Spaar-signed.ipa"
+echo "Built $OUT/Spaar-signed.ipa"

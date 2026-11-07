@@ -8,6 +8,7 @@ xcodebuild build \
   -project Envelope.xcodeproj \
   -scheme Envelope \
   -configuration Release \
+  CURRENT_PROJECT_VERSION="${BUILD_NUMBER:-1}" \
   -sdk iphoneos \
   -destination 'generic/platform=iOS' \
   -derivedDataPath build/unsigned \
@@ -21,9 +22,19 @@ test -d "$APP"
 if [ ! -d "$APP/Metadata.appintents" ]; then
   echo "::error::Metadata.appintents missing from app bundle"; exit 1
 fi
+# Show what the phone will see: name, version and icon.
+PL="$APP/Info.plist"
+for k in CFBundleDisplayName CFBundleName CFBundleShortVersionString CFBundleVersion; do
+  echo "$k = $(/usr/libexec/PlistBuddy -c "Print :$k" "$PL")"
+done
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$PL")" != "Spaar" ]; then
+  echo "::error::App name is not Spaar"; exit 1
+fi
+/usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$PL" | grep -qx AppIcon \
+  || { echo "::error::App icon missing from Info.plist"; exit 1; }
 STAGE="$(mktemp -d)"
 mkdir -p "$STAGE/Payload"
 cp -R "$APP" "$STAGE/Payload/"
-(cd "$STAGE" && zip -qry Envelope-unsigned.ipa Payload)
-mv "$STAGE/Envelope-unsigned.ipa" "$OUT/"
-echo "Built $OUT/Envelope-unsigned.ipa"
+(cd "$STAGE" && zip -qry Spaar-unsigned.ipa Payload)
+mv "$STAGE/Spaar-unsigned.ipa" "$OUT/"
+echo "Built $OUT/Spaar-unsigned.ipa"

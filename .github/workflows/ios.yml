@@ -10,6 +10,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     env:
+      BUILD_NUMBER: ${{ github.run_number }}
       HAS_SIGNING: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' && secrets.BUILD_PROVISION_PROFILE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +86,7 @@ jobs:
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Envelope-ipa
+          name: Spaar-ipa
           path: build/out/*.ipa
           if-no-files-found: error
 
