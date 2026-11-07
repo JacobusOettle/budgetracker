@@ -86,7 +86,7 @@ struct MonthEndSummary: Equatable {
 /// months from then on, so importing a past statement (which backdates
 /// budgets) doesn't ask you to close a year of old months.
 enum UsageStart {
-    static let key = "tally.usageStart"
+    static let key = "spaar.usageStart"
 
     /// Saved the first time it's asked for: the earliest budget, or now.
     static func date(budgets: [Budget], now: Date = .now, defaults: UserDefaults = .standard) -> Date {

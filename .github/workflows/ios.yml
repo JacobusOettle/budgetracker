@@ -30,8 +30,8 @@ jobs:
           echo "Testing on simulator $UDID"
           set -o pipefail
           xcodebuild test \
-            -project Envelope.xcodeproj \
-            -scheme Envelope \
+            -project Spaar.xcodeproj \
+            -scheme Spaar \
             -destination "id=$UDID" \
             -resultBundlePath build/TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
@@ -57,7 +57,7 @@ jobs:
           xcrun simctl ui "$UDID" appearance dark || true
           xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --batteryState charged || true
           xcodebuild test \
-            -project Envelope.xcodeproj \
+            -project Spaar.xcodeproj \
             -scheme Screenshots \
             -destination "id=$UDID" \
             -resultBundlePath build/Screens.xcresult \

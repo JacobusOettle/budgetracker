@@ -184,7 +184,7 @@ struct AIConfig: Codable, Equatable {
 /// first unlock, so payments logged while the phone is locked can still use AI.
 /// It never leaves this device (no iCloud sync).
 enum KeychainStore {
-    static let service = "com.jacobusoettle.tally"
+    static let service = "com.jacobusoettle.spaar"
 
     static func get(_ account: String) -> String? {
         let query: [String: Any] = [

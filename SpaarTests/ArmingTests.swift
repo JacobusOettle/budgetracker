@@ -1,5 +1,5 @@
 import XCTest
-@testable import Envelope
+@testable import Spaar
 
 final class ArmingTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)

@@ -27,7 +27,7 @@ TEAM=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PLIST")
 APP_ID=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$PLIST")
 BUNDLE_ID="${APP_ID#"$TEAM".}"
 if [[ "$BUNDLE_ID" == *"*"* ]]; then
-  BUNDLE_ID="com.jacobusoettle.envelope"   # wildcard profile: keep project default
+  BUNDLE_ID="com.jacobusoettle.spaar"   # wildcard profile: keep project default
 fi
 mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
 cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
@@ -38,13 +38,13 @@ echo "Signing $BUNDLE_ID with team $TEAM, profile $UUID, method $METHOD"
 CLOUD=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.icloud-container-identifiers:0' "$PLIST" 2>/dev/null || true)
 APS=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' "$PLIST" 2>/dev/null || true)
 if [ -n "$CLOUD" ] && [ "$CLOUD" != "*" ]; then
-  ENT=Envelope/Envelope.entitlements
+  ENT=Spaar/Spaar.entitlements
   if [ -z "$APS" ]; then
     # Sync still works without push; other devices' changes arrive when the
     # app opens instead of straight away. Signing with aps-environment would fail.
     echo "::warning::Profile has iCloud but no Push Notifications; building without push"
-    ENT="$RUNNER_TEMP/Envelope-nopush.entitlements"
-    cp Envelope/Envelope.entitlements "$ENT"
+    ENT="$RUNNER_TEMP/Spaar-nopush.entitlements"
+    cp Spaar/Spaar.entitlements "$ENT"
     /usr/libexec/PlistBuddy -c 'Delete :aps-environment' "$ENT"
   fi
   echo "iCloud sync on: $CLOUD (push: ${APS:-none})"
@@ -57,12 +57,12 @@ fi
 if [ "$METHOD" = "development" ]; then IDENTITY="Apple Development"; else IDENTITY="Apple Distribution"; fi
 
 xcodebuild archive \
-  -project Envelope.xcodeproj \
-  -scheme Envelope \
+  -project Spaar.xcodeproj \
+  -scheme Spaar \
   -configuration Release \
   CURRENT_PROJECT_VERSION="${BUILD_NUMBER:-1}" \
   -destination 'generic/platform=iOS' \
-  -archivePath build/Envelope.xcarchive \
+  -archivePath build/Spaar.xcarchive \
   CODE_SIGN_STYLE=Manual \
   DEVELOPMENT_TEAM="$TEAM" \
   PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
@@ -87,7 +87,7 @@ cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
 PLIST
 
 xcodebuild -exportArchive \
-  -archivePath build/Envelope.xcarchive \
+  -archivePath build/Spaar.xcarchive \
   -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
   -exportPath build/export
 mv build/export/*.ipa "$OUT/Spaar-signed.ipa"

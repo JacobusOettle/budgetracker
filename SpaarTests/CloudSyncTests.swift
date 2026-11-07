@@ -1,10 +1,10 @@
 import XCTest
 import SwiftData
-@testable import Envelope
+@testable import Spaar
 
 final class CloudSyncConfigTests: XCTestCase {
     func testContainerOnlyFromARealValue() {
-        XCTAssertEqual(CloudSync.validContainer("iCloud.com.jacobusoettle.envelope"), "iCloud.com.jacobusoettle.envelope")
+        XCTAssertEqual(CloudSync.validContainer("iCloud.com.jacobusoettle.spaar"), "iCloud.com.jacobusoettle.spaar")
         XCTAssertNil(CloudSync.validContainer(nil))
         XCTAssertNil(CloudSync.validContainer(""), "unsigned / test builds blank it")
         XCTAssertNil(CloudSync.validContainer("iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)"), "unexpanded build setting")

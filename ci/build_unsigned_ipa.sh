@@ -5,8 +5,8 @@ set -euo pipefail
 OUT="${1:-build/out}"
 mkdir -p "$OUT"
 xcodebuild build \
-  -project Envelope.xcodeproj \
-  -scheme Envelope \
+  -project Spaar.xcodeproj \
+  -scheme Spaar \
   -configuration Release \
   CURRENT_PROJECT_VERSION="${BUILD_NUMBER:-1}" \
   -sdk iphoneos \
@@ -16,7 +16,7 @@ xcodebuild build \
   SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS= \
   | xcpretty || exit "${PIPESTATUS[0]}"
 
-APP="build/unsigned/Build/Products/Release-iphoneos/Envelope.app"
+APP="build/unsigned/Build/Products/Release-iphoneos/Spaar.app"
 test -d "$APP"
 # Confirm the App Intents metadata was generated, otherwise the actions will
 # not show up in Shortcuts.

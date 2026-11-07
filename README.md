@@ -6,10 +6,13 @@ Spaar about the payment, and it's logged to that budget. Spaar never connects
 to a bank, has no account or analytics, and all data stays on your devices
 and, with iCloud sync, in your own private iCloud.
 
-> **About the name.** The app is called **Spaar** on your home screen, in Shortcuts and in
-> notifications. Inside the code, the Xcode project, folders and bundle ID
-> (`com.jacobusoettle.envelope`) keep the old working name "Envelope", so your data and
-> your existing Shortcuts automation carry on working after an update.
+> **Moving from the old app.** Earlier builds used the bundle ID
+> `com.jacobusoettle.envelope`; the app is now `com.jacobusoettle.spaar`, which iOS
+> treats as a different app with its own storage. To move your data: in the old app,
+> Settings → **Move to new app** → *Create backup file* and save it to Files; in the
+> new app, same screen → *Restore from backup file*. Then set up the Apple Pay
+> automation again for the new app and delete the old one. (Temporary: this screen
+> is removed once the move is done.)
 
 ## Using Spaar
 
@@ -45,7 +48,7 @@ quickly. Use **+** for online purchases and missed payments.
 **total to move to savings**. Overspending in one budget eats into the others,
 unassigned spending is taken off, and the total is never negative. If you track
 belongings, it also shows how much of that goes to replacement funds and how much
-is true savings. Envelope can't move money, so you transfer it in your banking
+is true savings. Spaar can't move money, so you transfer it in your banking
 app, enter what you moved and confirm. Your savings balance goes up by that
 amount, that month's replacement contributions are recorded, and budgets start
 fresh with the new calendar month. Closing a month twice does nothing. A banner on
@@ -171,7 +174,7 @@ available in South Africa, and needs Apple's approval.
 ## Spike results (4 Nov 2026, iPhone on iOS 26, FNB virtual card)
 
 - **Amount arrives as text**, for example `"R 100.70"`. It's parsed to cents
-  correctly. Envelope therefore uses a text parameter for Amount.
+  correctly. Spaar therefore uses a text parameter for Amount.
 - **Merchant and card name arrive intact**, for example "KFC Wierda Park" and
   "New FNB Fusion Virtual Premier25".
 - **It runs in the background with the phone locked** (Run Immediately), and
@@ -198,13 +201,13 @@ The **Belongings** tab keeps your *replacement savings* separate from your
      months it actually lasted are filled in for the next one automatically.
   3. **A typical lifespan for the category**, for example 3 years for a phone or
      12 years for a fridge. These are rough estimates built into the app (see
-     `Envelope/BelongingCategory.swift`), not real population statistics. The app
+     `Spaar/BelongingCategory.swift`), not real population statistics. The app
      has no internet access, so it can't look anything up.
 - **Monthly amount** = (target − already saved) ÷ months left, rounded **up** to
   the cent. A new R24 000 phone that should last 4 years is R500/month. If you add
   an item halfway through its life, or the fund falls behind, it catches up over
   the time that's left.
-- **Each month**, tap **Record November contributions**. Envelope can't move money,
+- **Each month**, tap **Record November contributions**. Spaar can't move money,
   so you make the transfer in your banking app and then confirm. You can record a
   month only once.
 - **Outlasting its expected life:** once an item reaches its expected date fully
@@ -220,7 +223,7 @@ The **Belongings** tab keeps your *replacement savings* separate from your
 
 ## Export for AI analysis
 
-The **Export** tab creates one file, `envelope-export-YYYY-MM-DD.json`, holding
+The **Export** tab creates one file, `spaar-export-YYYY-MM-DD.json`, holding
 everything: your savings split, belongings, each fund's history, ownership history
 and logged payments. JSON was chosen because AI assistants read it reliably:
 
@@ -266,7 +269,7 @@ On iOS 26 the trigger is called **Wallet**. Older iOS versions and guides call i
    fuel, parking and Uber. Leave **Merchant** empty.
 6. At the bottom, select **Run Immediately** (not "Run After Confirmation"). Tap **Next**.
 7. Tap **New Blank Automation** (some versions say **Create New Shortcut**).
-8. In the search bar at the bottom, type **Envelope** and tap **Log Payment**. The
+8. In the search bar at the bottom, type **Spaar** and tap **Log Payment**. The
    action reads: *Log* **Amount** *at* **Merchant**.
 9. Connect the fields:
    1. Tap the faded word **Amount** in the action.
@@ -335,16 +338,15 @@ Settings → iCloud sync says so.
 
 ### One-time setup for TestFlight / the App Store
 
-1. **Decide the bundle ID first.** It's `com.jacobusoettle.envelope` and the
-   iCloud container is derived from it: `iCloud.<bundle id>`. Changing either
-   after release means existing users' iCloud data isn't found, so rename now
-   if you want (`PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`).
+1. **Bundle ID:** `com.jacobusoettle.spaar`, and the iCloud container is
+   derived from it: `iCloud.com.jacobusoettle.spaar`. Don't change either after
+   release: existing users' iCloud data wouldn't be found.
 2. In the [Apple Developer portal](https://developer.apple.com/account/resources/identifiers/list):
    Identifiers → your App ID → enable **iCloud** (with CloudKit) and **Push
    Notifications**. Under iCloud, create/assign the container
-   `iCloud.com.jacobusoettle.envelope`.
+   `iCloud.com.jacobusoettle.spaar`.
 3. In Xcode (Signing & Capabilities) the target already has
-   `Envelope/Envelope.entitlements` (iCloud/CloudKit, the container, push) and
+   `Spaar/Spaar.entitlements` (iCloud/CloudKit, the container, push) and
    the *Remote notifications* background mode in `Info.plist`. With automatic
    signing Xcode registers the rest. For CI signing, regenerate the
    provisioning profile after step 2; `ci/build_signed_ipa.sh` turns sync on
@@ -373,12 +375,12 @@ Every app on an iPhone has to be signed by an Apple ID. Pick one option:
 ### Option A: You have a Mac (simplest)
 1. Install Xcode 16 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen):
    `brew install xcodegen`.
-2. `git clone` this repo, then `cd budgetracker && xcodegen generate && open Envelope.xcodeproj`.
-3. Select the **Envelope** target → **Signing & Capabilities** → choose your Team.
+2. `git clone` this repo, then `cd budgetracker && xcodegen generate && open Spaar.xcodeproj`.
+3. Select the **Spaar** target → **Signing & Capabilities** → choose your Team.
    A paid team builds with iCloud sync. With a free Apple ID, first clear
    *Code Signing Entitlements* and `SPAAR_CLOUDKIT_CONTAINER` in Build Settings
    (free accounts can't sign iCloud; see "iCloud sync"). If Xcode says the
-   bundle ID is taken, change `com.jacobusoettle.envelope` to something unique.
+   bundle ID is taken, change `com.jacobusoettle.spaar` to something unique.
 4. Plug in your iPhone. On the phone, enable **Settings → Privacy & Security →
    Developer Mode** and restart.
 5. Pick the iPhone as the run destination and press **Run** (⌘R).
@@ -402,13 +404,13 @@ re-signs automatically.
 
 ### Option C: Paid developer account, signed IPA from CI
 Add these **repository secrets** (Settings → Secrets and variables → Actions)
-and CI will also produce `Envelope-signed.ipa`:
+and CI will also produce `Spaar-signed.ipa`:
 
 | Secret | What |
 |---|---|
 | `BUILD_CERTIFICATE_BASE64` | Your *Apple Development* (or *Apple Distribution* for ad-hoc) certificate exported from Keychain as `.p12`, then `base64 -i cert.p12` |
 | `P12_PASSWORD` | Password you set when exporting the `.p12` |
-| `BUILD_PROVISION_PROFILE_BASE64` | A Development or Ad Hoc provisioning profile for `com.jacobusoettle.envelope` that includes your iPhone's UDID, as `base64 -i profile.mobileprovision` |
+| `BUILD_PROVISION_PROFILE_BASE64` | A Development or Ad Hoc provisioning profile for `com.jacobusoettle.spaar` that includes your iPhone's UDID, as `base64 -i profile.mobileprovision` |
 
 Optional repository **variable** `EXPORT_METHOD`: `development` (the default) or
 `ad-hoc`. A wildcard profile works too. The bundle ID is read from the profile.
@@ -418,7 +420,7 @@ or Finder (drag it onto the phone).
 ## CI
 
 `.github/workflows/ios.yml` runs on every push, on a `macos-26` runner (Xcode 26, needed for Apple Intelligence):
-1. Generates `Envelope.xcodeproj` from `project.yml` with XcodeGen. The project
+1. Generates `Spaar.xcodeproj` from `project.yml` with XcodeGen. The project
    file isn't committed.
 2. Runs the unit tests on an iPhone simulator.
 3. Builds an unsigned Release `.ipa` and checks that the App Intents metadata is

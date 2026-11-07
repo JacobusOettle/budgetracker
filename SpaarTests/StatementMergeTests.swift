@@ -1,6 +1,6 @@
 import XCTest
 import SwiftData
-@testable import Envelope
+@testable import Spaar
 
 private final class CannedClient: LLMJSONCompleting {
     var replies: [String]

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Envelope
+@testable import Spaar
 
 final class AmountParserTests: XCTestCase {
     private func assertParses(_ input: String, cents: Int, currency: String?, file: StaticString = #filePath, line: UInt = #line) {

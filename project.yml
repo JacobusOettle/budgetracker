@@ -1,4 +1,4 @@
-name: Envelope
+name: Spaar
 options:
   bundleIdPrefix: com.jacobusoettle
   deploymentTarget:
@@ -12,13 +12,13 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     TARGETED_DEVICE_FAMILY: "1"
 targets:
-  Envelope:
+  Spaar:
     type: application
     platform: iOS
-    sources: [Envelope]
+    sources: [Spaar]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.spaar
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Spaar
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
@@ -26,45 +26,45 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        INFOPLIST_FILE: Envelope/Info.plist
+        INFOPLIST_FILE: Spaar/Info.plist
         # iCloud sync. Needs the iCloud (CloudKit) capability on the App ID with this
         # container; see README "iCloud sync". CI builds without signing blank it.
         SPAAR_CLOUDKIT_CONTAINER: iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
-        CODE_SIGN_ENTITLEMENTS: Envelope/Envelope.entitlements
+        CODE_SIGN_ENTITLEMENTS: Spaar/Spaar.entitlements
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Lets Spaar reach an AI model running on your own computer, such as Ollama or LM Studio."
-  EnvelopeTests:
+  SpaarTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [EnvelopeTests]
+    sources: [SpaarTests]
     dependencies:
-      - target: Envelope
+      - target: Spaar
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.spaar.tests
         GENERATE_INFOPLIST_FILE: YES
-  EnvelopeUITests:
+  SpaarUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [EnvelopeUITests]
+    sources: [SpaarUITests]
     dependencies:
-      - target: Envelope
+      - target: Spaar
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.envelope.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.jacobusoettle.spaar.uitests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Envelope
+        TEST_TARGET_NAME: Spaar
 schemes:
-  Envelope:
+  Spaar:
     build:
       targets:
-        Envelope: all
-        EnvelopeTests: [test]
+        Spaar: all
+        SpaarTests: [test]
     test:
-      targets: [EnvelopeTests]
+      targets: [SpaarTests]
   Screenshots:
     build:
       targets:
-        Envelope: all
-        EnvelopeUITests: [test]
+        Spaar: all
+        SpaarUITests: [test]
     test:
-      targets: [EnvelopeUITests]
+      targets: [SpaarUITests]

@@ -1,6 +1,6 @@
 import XCTest
 import UIKit
-@testable import Envelope
+@testable import Spaar
 
 final class SetupWalkthroughTests: XCTestCase {
     func testEveryStepHasItsPictureInTheApp() {

@@ -4,7 +4,7 @@ struct RootView: View {
     var body: some View {
         TabView {
             BudgetsHomeView()
-                .tabItem { Label("Budgets", systemImage: "envelope") }
+                .tabItem { Label("Budgets", systemImage: "chart.pie") }
             HistoryView()
                 .tabItem { Label("History", systemImage: "list.bullet.rectangle") }
             BelongingsView()

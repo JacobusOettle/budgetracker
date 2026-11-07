@@ -3,9 +3,10 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-// TEMPORARY: moves everything from the old app (bundle ID ...envelope) to the
-// renamed one (...spaar), which iOS treats as a different app with its own,
-// empty storage. Delete this file and its row in Settings once moved.
+// TEMPORARY: moves everything from the app's previous bundle ID to the
+// current one (com.jacobusoettle.spaar), which iOS treats as a different app
+// with its own, empty storage. Delete this file, its row in Settings and
+// SpaarTests/TransferBackupTests.swift once moved.
 
 /// A complete, lossless copy of the data and settings, as JSON.
 struct TransferBackup: Codable {

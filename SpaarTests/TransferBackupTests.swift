@@ -1,6 +1,6 @@
 import XCTest
 import SwiftData
-@testable import Envelope
+@testable import Spaar
 
 // TEMPORARY: remove with TransferBackup.swift.
 @MainActor

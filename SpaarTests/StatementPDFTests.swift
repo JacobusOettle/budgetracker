@@ -2,7 +2,7 @@ import XCTest
 import PDFKit
 import UIKit
 import SwiftData
-@testable import Envelope
+@testable import Spaar
 
 private final class RecordingJSONClient: LLMJSONCompleting {
     var replies: [String]

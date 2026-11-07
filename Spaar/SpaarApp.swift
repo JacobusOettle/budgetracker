@@ -3,7 +3,7 @@ import SwiftData
 import UserNotifications
 
 @main
-struct EnvelopeApp: App {
+struct SpaarApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
 

@@ -1,5 +1,5 @@
 import XCTest
-@testable import Envelope
+@testable import Spaar
 
 final class MoneyTests: XCTestCase {
     func testCentsRoundsHalfAwayFromZero() {
