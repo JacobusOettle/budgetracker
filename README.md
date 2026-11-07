@@ -6,9 +6,9 @@ Spaar about the payment, and it's logged to that budget. Spaar never connects
 to a bank, has no account or analytics, and all data stays on your devices
 and, with iCloud sync, in your own private iCloud.
 
-> **Moving from the old app.** Earlier builds used the bundle ID
-> `com.jacobusoettle.envelope`; the app is now `com.jacobusoettle.spaar`, which iOS
-> treats as a different app with its own storage. To move your data: in the old app,
+> **Moving from the old app.** Earlier builds used a different bundle ID; the app
+> is now `com.jacobusoettle.spaar`, which iOS treats as a different app with its
+> own storage. To move your data: in the old app,
 > Settings → **Move to new app** → *Create backup file* and save it to Files; in the
 > new app, same screen → *Restore from backup file*. Then set up the Apple Pay
 > automation again for the new app and delete the old one. (Temporary: this screen
