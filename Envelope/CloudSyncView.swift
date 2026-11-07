@@ -4,7 +4,7 @@ import SwiftUI
 struct CloudSyncView: View {
     @State private var wantsSync = CloudSync.userWantsSync
     @State private var confirmingRestore = false
-    @State private var restoreRequested = UserDefaults.standard.string(forKey: CloudSync.pendingRestoreKey) != nil
+    @State private var restoreRequested = UserDefaults.standard.bool(forKey: CloudSync.pendingRestoreKey)
     @State private var schemaMessage: String?
     private let monitor = CloudSyncMonitor.shared
 
@@ -21,6 +21,13 @@ struct CloudSyncView: View {
                 Section {
                     Toggle("Sync with iCloud", isOn: $wantsSync)
                         .onChange(of: wantsSync) { CloudSync.userWantsSync = wantsSync }
+                    if wantsSync && CloudSync.activeContainerID == nil
+                        && UserDefaults.standard.bool(forKey: CloudSync.restoredLocalKey) {
+                        Label("You restored a backup on this iPhone. Turning sync on adds it to iCloud alongside what's already there, so things that are in both will show twice. Only do this if iCloud is empty or you're happy to tidy up.",
+                              systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
                     if restartNeeded {
                         Label("Close and reopen Spaar to \(wantsSync ? "turn sync on" : "turn sync off").",
                               systemImage: "arrow.clockwise")
@@ -70,7 +77,7 @@ struct CloudSyncView: View {
                     }
                     .confirmationDialog("Restore the backup?", isPresented: $confirmingRestore, titleVisibility: .visible) {
                         Button("Restore and turn sync off", role: .destructive) {
-                            UserDefaults.standard.set(backup.path, forKey: CloudSync.pendingRestoreKey)
+                            UserDefaults.standard.set(true, forKey: CloudSync.pendingRestoreKey)
                             restoreRequested = true
                         }
                     } message: {

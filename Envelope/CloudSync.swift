@@ -59,8 +59,13 @@ enum CloudSync {
     // MARK: Backup before the first sync
 
     static let backupDoneKey = "cloudSync.preSyncBackupDone"
-    static let backupPathKey = "cloudSync.preSyncBackupPath"
+    /// Relative to the store's folder (the app's container path can change
+    /// between updates, so absolute paths aren't kept).
+    static let backupPathKey = "cloudSync.preSyncBackupRelativePath"
     static let pendingRestoreKey = "cloudSync.pendingRestore"
+    /// The store was restored from the backup; turning sync on again adds it
+    /// to iCloud alongside what's there, so the toggle warns about that.
+    static let restoredLocalKey = "cloudSync.restoredLocal"
 
     static let storeFileSuffixes = ["", "-wal", "-shm"]
 
@@ -76,7 +81,8 @@ enum CloudSync {
             return true
         }
         let stamp = ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-")
-        let dir = store.deletingLastPathComponent().appending(path: "PreSyncBackup").appending(path: stamp)
+        let relative = "PreSyncBackup/\(stamp)"
+        let dir = store.deletingLastPathComponent().appending(path: relative)
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             for suffix in storeFileSuffixes {
@@ -84,7 +90,7 @@ enum CloudSync {
                 guard fm.fileExists(atPath: source.path) else { continue }
                 try fm.copyItem(at: source, to: dir.appending(path: store.lastPathComponent + suffix))
             }
-            defaults.set(dir.path, forKey: backupPathKey)
+            defaults.set(relative, forKey: backupPathKey)
             defaults.set(true, forKey: backupDoneKey)
             return true
         } catch {
@@ -94,34 +100,68 @@ enum CloudSync {
     }
 
     /// The pre-sync backup, if one was made and still exists.
-    static func backupFolder(defaults: UserDefaults = .standard, fm: FileManager = .default) -> URL? {
-        guard let path = defaults.string(forKey: backupPathKey), fm.fileExists(atPath: path) else { return nil }
-        return URL(fileURLWithPath: path)
+    static func backupFolder(store: URL = Persistence.storeURL, defaults: UserDefaults = .standard, fm: FileManager = .default) -> URL? {
+        guard let relative = defaults.string(forKey: backupPathKey) else { return nil }
+        let dir = store.deletingLastPathComponent().appending(path: relative)
+        guard fm.fileExists(atPath: dir.appending(path: store.lastPathComponent).path) else { return nil }
+        return dir
     }
 
     /// Replaces the store with the backup. Only call before any container
-    /// has opened the store (i.e. at launch). Sync is turned off so the
-    /// restored copy isn't mixed with what's in iCloud.
+    /// has opened the store (i.e. at launch). Sync is turned off first so the
+    /// restored copy isn't mixed with what's in iCloud. The backup is copied
+    /// next to the store first and only swapped in once every file copied,
+    /// so a failed restore leaves the current data as it was.
     static func restoreIfRequested(store: URL, defaults: UserDefaults = .standard, fm: FileManager = .default) {
-        guard let path = defaults.string(forKey: pendingRestoreKey) else { return }
+        guard defaults.bool(forKey: pendingRestoreKey) else { return }
         defaults.removeObject(forKey: pendingRestoreKey)
-        let backup = URL(fileURLWithPath: path)
-        let backupStore = backup.appending(path: store.lastPathComponent)
-        guard fm.fileExists(atPath: backupStore.path) else { return }
+        guard let backup = backupFolder(store: store, defaults: defaults, fm: fm) else {
+            launchError = "The backup couldn't be found, so nothing was restored."
+            return
+        }
+        defaults.set(false, forKey: enabledKey)
+        let staging = store.deletingLastPathComponent().appending(path: "RestoreStaging-\(UUID().uuidString)")
         do {
+            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: staging) }
+            var staged: [String] = []
             for suffix in storeFileSuffixes {
-                let target = URL(fileURLWithPath: store.path + suffix)
-                if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
-            }
-            for suffix in storeFileSuffixes {
-                let source = URL(fileURLWithPath: backupStore.path + suffix)
+                let source = backup.appending(path: store.lastPathComponent + suffix)
                 guard fm.fileExists(atPath: source.path) else { continue }
-                try fm.copyItem(at: source, to: URL(fileURLWithPath: store.path + suffix))
+                try fm.copyItem(at: source, to: staging.appending(path: store.lastPathComponent + suffix))
+                staged.append(suffix)
             }
-            defaults.set(false, forKey: enabledKey)
+            // Everything copied: swap. Move the live files aside rather than
+            // deleting them until the new ones are in place.
+            let aside = staging.appending(path: "previous")
+            try fm.createDirectory(at: aside, withIntermediateDirectories: true)
+            for suffix in storeFileSuffixes {
+                let live = URL(fileURLWithPath: store.path + suffix)
+                if fm.fileExists(atPath: live.path) {
+                    try fm.moveItem(at: live, to: aside.appending(path: store.lastPathComponent + suffix))
+                }
+            }
+            do {
+                for suffix in staged {
+                    try fm.moveItem(at: staging.appending(path: store.lastPathComponent + suffix),
+                                    to: URL(fileURLWithPath: store.path + suffix))
+                }
+            } catch {
+                // Put the previous files back.
+                for suffix in storeFileSuffixes {
+                    let live = URL(fileURLWithPath: store.path + suffix)
+                    try? fm.removeItem(at: live)
+                    try? fm.moveItem(at: aside.appending(path: store.lastPathComponent + suffix), to: live)
+                }
+                throw error
+            }
+            // The restored copy has never synced: a fresh backup will be
+            // made, and the toggle warns, if sync is turned on again.
+            defaults.set(false, forKey: backupDoneKey)
+            defaults.set(true, forKey: restoredLocalKey)
             restoredFromBackup = true
         } catch {
-            launchError = "Couldn't restore the backup: \(error.localizedDescription)"
+            launchError = "Couldn't restore the backup, so your data was left as it was: \(error.localizedDescription)"
         }
     }
 
@@ -279,9 +319,18 @@ enum SyncDeduplicator {
         let groups = Dictionary(grouping: active) { normalizedName($0.name) }
         var merged = 0
         for (key, group) in groups where !key.isEmpty && group.count > 1 {
-            let sorted = group.sorted { ($0.insertedAt, $0.id.uuidString) < ($1.insertedAt, $1.id.uuidString) }
+            // If one install has two budgets with this name, they're
+            // deliberate: leave the whole group alone.
+            let perOrigin = Dictionary(grouping: group, by: \.originDevice)
+            guard perOrigin.values.allSatisfy({ $0.count == 1 }) else { continue }
+            // Budgets from before sync existed (no origin) are the oldest,
+            // whatever their insertedAt (that was filled in at the update).
+            let sorted = group.sorted {
+                ($0.originDevice.isEmpty ? 0 : 1, $0.insertedAt, $0.id.uuidString)
+                    < ($1.originDevice.isEmpty ? 0 : 1, $1.insertedAt, $1.id.uuidString)
+            }
             let keep = sorted[0]
-            for duplicate in sorted.dropFirst() where duplicate.originDevice != keep.originDevice {
+            for duplicate in sorted.dropFirst() {
                 for payment in duplicate.payments ?? [] { payment.budget = keep }
                 if keep.colorName.isEmpty { keep.colorName = duplicate.colorName }
                 if let armed = duplicate.armedAt, armed > (keep.armedAt ?? .distantPast) { keep.armedAt = armed }
@@ -361,6 +410,11 @@ enum SyncDeduplicator {
             .sorted { ($0.updatedAt, $0.deltaCents) < ($1.updatedAt, $1.deltaCents) }
         if let keep = real.first {
             for p in provisional {
+                // Typed in after those changes: the balance already has them.
+                if let setAt = keep.balanceSetAt, p.updatedAt <= setAt {
+                    context.delete(p)
+                    continue
+                }
                 keep.balanceCents += p.deltaCents
                 keep.updatedAt = max(keep.updatedAt, p.updatedAt)
                 context.delete(p)

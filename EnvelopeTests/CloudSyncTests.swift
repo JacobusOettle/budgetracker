@@ -44,7 +44,8 @@ final class CloudSyncConfigTests: XCTestCase {
         try Data("wal".utf8).write(to: URL(fileURLWithPath: store.path + "-wal"))
 
         XCTAssertTrue(CloudSync.backUpBeforeFirstSync(store: store, defaults: defaults))
-        let backup = try XCTUnwrap(CloudSync.backupFolder(defaults: defaults))
+        let backup = try XCTUnwrap(CloudSync.backupFolder(store: store, defaults: defaults))
+        XCTAssertFalse(defaults.string(forKey: CloudSync.backupPathKey)!.hasPrefix("/"), "kept relative to survive container moves")
         XCTAssertEqual(try String(contentsOf: backup.appending(path: "default.store"), encoding: .utf8), "original")
         XCTAssertTrue(fm.fileExists(atPath: backup.appending(path: "default.store-wal").path))
 
@@ -56,19 +57,23 @@ final class CloudSyncConfigTests: XCTestCase {
         // Restore replaces the store and turns sync off.
         defaults.set(true, forKey: CloudSync.enabledKey)
         try Data("shm".utf8).write(to: URL(fileURLWithPath: store.path + "-shm"))
-        defaults.set(backup.path, forKey: CloudSync.pendingRestoreKey)
+        defaults.set(true, forKey: CloudSync.pendingRestoreKey)
         CloudSync.restoreIfRequested(store: store, defaults: defaults)
         XCTAssertEqual(try String(contentsOf: store, encoding: .utf8), "original")
+        XCTAssertTrue(fm.fileExists(atPath: store.path + "-wal"))
         XCTAssertFalse(fm.fileExists(atPath: store.path + "-shm"), "stale side files removed")
         XCTAssertEqual(defaults.object(forKey: CloudSync.enabledKey) as? Bool, false)
-        XCTAssertNil(defaults.string(forKey: CloudSync.pendingRestoreKey))
+        XCTAssertFalse(defaults.bool(forKey: CloudSync.pendingRestoreKey))
+        XCTAssertFalse(defaults.bool(forKey: CloudSync.backupDoneKey), "a fresh backup before syncing again")
+        XCTAssertTrue(defaults.bool(forKey: CloudSync.restoredLocalKey))
+        XCTAssertNotNil(CloudSync.backupFolder(store: store, defaults: defaults), "backup kept")
     }
 
     func testNothingToBackUpOnAFreshInstall() {
         let defaults = UserDefaults(suiteName: "spaar.test.nobackup.\(UUID().uuidString)")!
         let store = FileManager.default.temporaryDirectory.appending(path: "missing-\(UUID().uuidString).store")
         XCTAssertTrue(CloudSync.backUpBeforeFirstSync(store: store, defaults: defaults))
-        XCTAssertNil(CloudSync.backupFolder(defaults: defaults))
+        XCTAssertNil(CloudSync.backupFolder(store: store, defaults: defaults))
     }
 
     func testEverySyncedModelCanBeCreatedWithDefaults() throws {
@@ -147,6 +152,28 @@ final class SyncDeduplicatorTests: XCTestCase {
         try context.save()
         XCTAssertEqual(SyncDeduplicator.run(in: context).budgets, 0)
         XCTAssertEqual(try active().count, 4)
+    }
+
+    func testDeliberateSameNamesOnOnePhoneBlockMergingTheGroup() throws {
+        _ = budget("Food", device: "phone-B", inserted: d(2026, 1, 1))
+        _ = budget("Food", device: "phone-A", inserted: d(2026, 2, 1))
+        _ = budget("Food", device: "phone-A", inserted: d(2026, 3, 1))
+        try context.save()
+        XCTAssertEqual(SyncDeduplicator.run(in: context).budgets, 0)
+        XCTAssertEqual(try active().count, 3)
+    }
+
+    func testABudgetFromBeforeSyncStaysEvenIfItsDateIsTheUpdateDay() throws {
+        // insertedAt of old budgets is filled in on the update day, which can
+        // be later than a new phone's budget.
+        let legacy = budget("Food", device: "", inserted: d(2026, 11, 7))
+        legacy.monthlyCents = 450_000
+        let newPhone = budget("Food", device: "phone-B", inserted: d(2026, 11, 6))
+        try context.save()
+        SyncDeduplicator.run(in: context)
+        XCTAssertEqual(newPhone.mergedIntoID, legacy.id)
+        XCTAssertNil(legacy.mergedIntoID)
+        XCTAssertEqual(legacy.monthlyCents, 450_000, "your real allowance is kept")
     }
 
     func testAPaymentThatSyncsInLaterFollowsTheMergedBudget() throws {
@@ -243,6 +270,29 @@ final class SyncDeduplicatorTests: XCTestCase {
         XCTAssertEqual(left.count, 1)
         XCTAssertEqual(left.first?.balanceCents, 10_050_000)
         XCTAssertEqual(left.first?.isProvisional, false)
+    }
+
+    func testABalanceTypedInAfterwardsAlreadyIncludesTheNewPhonesChanges() throws {
+        let stub = SavingsAccount(balanceCents: 0, updatedAt: d(2026, 11, 5))
+        stub.isProvisional = true
+        stub.adjust(by: 50_000, at: d(2026, 11, 5))
+        context.insert(stub)
+        let real = SavingsAccount(balanceCents: 0, updatedAt: d(2026, 1, 1))
+        context.insert(real)
+        real.set(to: 10_050_000, at: d(2026, 11, 6))   // typed in on phone A later
+        try context.save()
+        SyncDeduplicator.run(in: context)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<SavingsAccount>()).map(\.balanceCents), [10_050_000])
+    }
+
+    func testChangesGoToTheRealBalanceOnceItArrives() throws {
+        let stub = SavingsAccount(balanceCents: 0, updatedAt: d(2026, 11, 7))
+        stub.isProvisional = true
+        context.insert(stub)
+        let real = SavingsAccount(balanceCents: 900, updatedAt: d(2026, 10, 1))
+        context.insert(real)
+        try context.save()
+        XCTAssertTrue(SavingsAccount.current(in: context) === real)
     }
 
     func testTwoRealBalancesKeepTheLatest() throws {

@@ -38,6 +38,7 @@ enum Persistence {
                     configurations: ModelConfiguration(schema: schema, cloudKitDatabase: .private(cloud))
                 )
                 CloudSync.activeContainerID = cloud
+                UserDefaults.standard.removeObject(forKey: CloudSync.restoredLocalKey)
                 return container
             } catch {
                 // Never lose access to the data over sync: fall back to local.

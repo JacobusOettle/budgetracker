@@ -171,6 +171,8 @@ final class SavingsAccount {
     var isProvisional: Bool = false
     /// Sum of the adds/subtracts made to a provisional account.
     var deltaCents: Int = 0
+    /// When you last typed in the exact balance.
+    var balanceSetAt: Date?
 
     init(balanceCents: Int = 0, updatedAt: Date = .now) {
         self.balanceCents = balanceCents
@@ -181,8 +183,11 @@ final class SavingsAccount {
     static func current(in context: ModelContext) -> SavingsAccount {
         // Newest first: after iCloud sync there can briefly be two (one per
         // device) until SyncDeduplicator merges them.
+        // Once a real balance is here, changes go to it, never to a
+        // provisional one this phone made before its data arrived.
         let newest = FetchDescriptor<SavingsAccount>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
-        if let existing = try? context.fetch(newest).first {
+        let accounts = (try? context.fetch(newest)) ?? []
+        if let existing = accounts.first(where: { !$0.isProvisional }) ?? accounts.first {
             return existing
         }
         let account = SavingsAccount()
@@ -203,6 +208,7 @@ final class SavingsAccount {
         balanceCents = cents
         isProvisional = false
         deltaCents = 0
+        balanceSetAt = date
         updatedAt = date
     }
 
