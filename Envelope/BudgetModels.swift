@@ -4,11 +4,13 @@ import SwiftData
 /// A monthly spending budget, e.g. Food R3 000.
 @Model
 final class Budget {
-    var id: UUID
-    var name: String
-    var monthlyCents: Int
-    var sortOrder: Int
-    var createdAt: Date
+    // Every stored property has a default and every relationship is optional:
+    // CloudKit sync (iCloud) requires it.
+    var id: UUID = UUID()
+    var name: String = ""
+    var monthlyCents: Int = 0
+    var sortOrder: Int = 0
+    var createdAt: Date = Date.now
     /// Removed by the user. Kept so past payments and months still add up.
     var archivedAt: Date?
     /// When it was armed. It stays armed for `Arming.duration` from then,
@@ -18,7 +20,7 @@ final class Budget {
     var colorName: String = ""
 
     @Relationship(deleteRule: .nullify, inverse: \Payment.budget)
-    var payments: [Payment] = []
+    var payments: [Payment]? = []
 
     init(name: String, monthlyCents: Int, sortOrder: Int = 0, createdAt: Date = .now) {
         self.id = UUID()
@@ -29,7 +31,7 @@ final class Budget {
     }
 
     func spentCents(in interval: DateInterval) -> Int {
-        payments
+        (payments ?? [])
             .filter { MonthMath.contains(interval, $0.date) }
             .reduce(0) { $0 + $1.amountCents }
     }
@@ -53,18 +55,18 @@ enum PaymentSource: String, Codable {
 /// A card payment. `budget == nil` means Unassigned.
 @Model
 final class Payment {
-    var id: UUID
+    var id: UUID = UUID()
     /// Always positive: money spent.
-    var amountCents: Int
-    var merchant: String
-    var card: String
-    var date: Date
-    var sourceRaw: String
+    var amountCents: Int = 0
+    var merchant: String = ""
+    var card: String = ""
+    var date: Date = Date.now
+    var sourceRaw: String = PaymentSource.manual.rawValue
     /// The amount exactly as Shortcuts sent it (e.g. "R 100.70").
-    var rawAmount: String
-    var note: String
+    var rawAmount: String = ""
+    var note: String = ""
     /// The amount couldn't be read or wasn't in rand. Check and fix it.
-    var needsReview: Bool
+    var needsReview: Bool = false
     var budget: Budget?
     /// How it got its budget: see `Assignment`. Default for older rows: "".
     var assignmentRaw: String = ""
@@ -131,17 +133,17 @@ enum Assignment: String, Codable {
 /// A month you closed on the month-end screen.
 @Model
 final class MonthClose {
-    var monthKey: String
-    var closedAt: Date
-    var totalLeftCents: Int
-    var unassignedCents: Int
-    var toSaveCents: Int
+    var monthKey: String = ""
+    var closedAt: Date = Date.now
+    var totalLeftCents: Int = 0
+    var unassignedCents: Int = 0
+    var toSaveCents: Int = 0
     /// What you said you actually moved to savings.
-    var movedCents: Int
+    var movedCents: Int = 0
     /// Part of the move that went to belonging replacement funds.
-    var replacementCents: Int
+    var replacementCents: Int = 0
     /// JSON array of MonthEndLine: what each budget had left that month.
-    var linesJSON: String
+    var linesJSON: String = "[]"
 
     init(monthKey: String, closedAt: Date, summary: MonthEndSummary, movedCents: Int, replacementCents: Int) {
         self.monthKey = monthKey

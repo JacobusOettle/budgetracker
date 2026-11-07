@@ -68,7 +68,7 @@ struct BelongingDetailView: View {
             }
 
             Section("Fund history") {
-                if belonging.fundEntries.isEmpty {
+                if belonging.allFundEntries.isEmpty {
                     Text("Nothing yet").foregroundStyle(.secondary)
                 }
                 ForEach(belonging.sortedFundEntries) { entry in

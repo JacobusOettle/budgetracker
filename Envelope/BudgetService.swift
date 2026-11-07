@@ -97,7 +97,7 @@ enum BudgetService {
     /// Deletes a budget with no payments. One with payments is archived
     /// instead, so history and past months still add up.
     static func remove(_ budget: Budget, now: Date = .now, in context: ModelContext) throws {
-        if budget.payments.isEmpty {
+        if (budget.payments ?? []).isEmpty {
             context.delete(budget)
         } else {
             budget.archivedAt = now

@@ -10,6 +10,10 @@ struct EnvelopeApp: App {
         WindowGroup {
             RootView()
                 .task {
+                    CloudSyncMonitor.shared.start(container: Persistence.shared)
+                    if CloudSync.activeContainerID != nil {
+                        SyncDeduplicator.run(in: Persistence.shared.mainContext)
+                    }
                     await Notifier.requestAuthorization()
                     await ReminderScheduler.apply()
                 }

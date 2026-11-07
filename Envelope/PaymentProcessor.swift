@@ -73,7 +73,7 @@ enum PaymentProcessor {
 
         if let budget = try BudgetService.armedBudget(now: now, in: context) {
             let interval = MonthMath.interval(containing: now, calendar: calendar)
-            let spentBefore = budget.payments
+            let spentBefore = (budget.payments ?? [])
                 .filter { $0.id != payment.id && MonthMath.contains(interval, $0.date) }
                 .reduce(0) { $0 + $1.amountCents }
             payment.budget = budget

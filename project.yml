@@ -27,6 +27,10 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_FILE: Envelope/Info.plist
+        # iCloud sync. Needs the iCloud (CloudKit) capability on the App ID with this
+        # container; see README "iCloud sync". CI builds without signing blank it.
+        SPAAR_CLOUDKIT_CONTAINER: iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)
+        CODE_SIGN_ENTITLEMENTS: Envelope/Envelope.entitlements
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Lets Spaar reach an AI model running on your own computer, such as Ollama or LM Studio."
   EnvelopeTests:
     type: bundle.unit-test

@@ -13,6 +13,7 @@ xcodebuild build \
   -destination 'generic/platform=iOS' \
   -derivedDataPath build/unsigned \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+  SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS= \
   | xcpretty || exit "${PIPESTATUS[0]}"
 
 APP="build/unsigned/Build/Products/Release-iphoneos/Envelope.app"
@@ -21,6 +22,10 @@ test -d "$APP"
 # not show up in Shortcuts.
 if [ ! -d "$APP/Metadata.appintents" ]; then
   echo "::error::Metadata.appintents missing from app bundle"; exit 1
+fi
+# Sideloading strips the iCloud entitlement, so this build must not use CloudKit.
+if [ -n "$(/usr/libexec/PlistBuddy -c 'Print :SpaarCloudKitContainer' "$APP/Info.plist" 2>/dev/null)" ]; then
+  echo "::error::Unsigned build must not enable iCloud sync"; exit 1
 fi
 # Show what the phone will see: name, version and icon.
 PL="$APP/Info.plist"

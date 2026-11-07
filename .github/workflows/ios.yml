@@ -35,6 +35,7 @@ jobs:
             -destination "id=$UDID" \
             -resultBundlePath build/TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
+            SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS= \
             | xcpretty
 
       - name: Upload test results
@@ -60,7 +61,7 @@ jobs:
             -scheme Screenshots \
             -destination "id=$UDID" \
             -resultBundlePath build/Screens.xcresult \
-            CODE_SIGNING_ALLOWED=NO | xcpretty || true
+            CODE_SIGNING_ALLOWED=NO SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS= | xcpretty || true
           mkdir -p build/screens
           xcrun xcresulttool export attachments --path build/Screens.xcresult --output-path build/screens || true
           ls -la build/screens || true

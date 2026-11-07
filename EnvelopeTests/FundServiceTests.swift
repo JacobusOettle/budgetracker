@@ -54,7 +54,7 @@ final class FundServiceTests: XCTestCase {
         XCTAssertEqual(settlement.releasedToTrueSavingsCents, 400_000)
         XCTAssertEqual(phone.previousLifespanMonths, 54)
         XCTAssertEqual(phone.fundBalanceCents, 0)
-        XCTAssertEqual(phone.ownerships.count, 2)
+        XCTAssertEqual(phone.allOwnerships.count, 2)
         XCTAssertEqual(phone.currentOwnership?.priceCents, 2_000_000)
         XCTAssertEqual(phone.lifespan(), Lifespan(months: 54, source: .previous))
         XCTAssertEqual(SavingsAccount.current(in: context).balanceCents, 3_000_000)

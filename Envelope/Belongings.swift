@@ -4,21 +4,25 @@ import SwiftData
 /// Something you own and plan to replace one day (phone, fridge, tyres…).
 @Model
 final class Belonging {
-    var id: UUID
-    var name: String
-    var categoryRaw: String
-    var createdAt: Date
+    var id: UUID = UUID()
+    var name: String = ""
+    var categoryRaw: String = BelongingCategory.other.rawValue
+    var createdAt: Date = Date.now
     /// How long the previous one lasted, in months. Entered when adding the
     /// item, or set automatically when you replace it.
     var previousLifespanMonths: Int?
     /// Retired without a replacement. Kept for history.
-    var archived: Bool
+    var archived: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \Ownership.belonging)
-    var ownerships: [Ownership] = []
+    var ownerships: [Ownership]? = []
 
     @Relationship(deleteRule: .cascade, inverse: \FundEntry.belonging)
-    var fundEntries: [FundEntry] = []
+    var fundEntries: [FundEntry]? = []
+
+    /// Non-optional views of the relationships (optional only for CloudKit).
+    var allOwnerships: [Ownership] { ownerships ?? [] }
+    var allFundEntries: [FundEntry] { fundEntries ?? [] }
 
     init(name: String, category: BelongingCategory, previousLifespanMonths: Int? = nil, createdAt: Date = .now) {
         self.id = UUID()
@@ -36,24 +40,24 @@ final class Belonging {
 
     /// The one you own now.
     var currentOwnership: Ownership? {
-        ownerships.filter { $0.retiredOn == nil }.max { $0.purchasedOn < $1.purchasedOn }
+        allOwnerships.filter { $0.retiredOn == nil }.max { $0.purchasedOn < $1.purchasedOn }
     }
 
     var sortedOwnerships: [Ownership] {
-        ownerships.sorted { $0.purchasedOn > $1.purchasedOn }
+        allOwnerships.sorted { $0.purchasedOn > $1.purchasedOn }
     }
 
     var sortedFundEntries: [FundEntry] {
-        fundEntries.sorted { $0.date > $1.date }
+        allFundEntries.sorted { $0.date > $1.date }
     }
 
     /// Money currently set aside to replace this item.
     var fundBalanceCents: Int {
-        fundEntries.reduce(0) { $0 + $1.cents }
+        allFundEntries.reduce(0) { $0 + $1.cents }
     }
 
     func hasContribution(forMonthKey key: String) -> Bool {
-        fundEntries.contains { $0.kind == .contribution && $0.monthKey == key }
+        allFundEntries.contains { $0.kind == .contribution && $0.monthKey == key }
     }
 
     func lifespan() -> Lifespan? {
@@ -83,9 +87,9 @@ final class Belonging {
 /// replaced or retired.
 @Model
 final class Ownership {
-    var id: UUID
-    var purchasedOn: Date
-    var priceCents: Int
+    var id: UUID = UUID()
+    var purchasedOn: Date = Date.now
+    var priceCents: Int = 0
     /// Expected price of the next one. nil means "same as I paid".
     var replacementCostCents: Int?
     /// Your own estimate of how long this one will last, in months.
@@ -133,13 +137,13 @@ enum FundEntryKind: String, Codable, CaseIterable {
 /// into the fund, negative cents come out.
 @Model
 final class FundEntry {
-    var id: UUID
-    var date: Date
-    var kindRaw: String
-    var cents: Int
+    var id: UUID = UUID()
+    var date: Date = Date.now
+    var kindRaw: String = FundEntryKind.adjustment.rawValue
+    var cents: Int = 0
     /// "2026-11" for monthly contributions. Stops a month being counted twice.
     var monthKey: String?
-    var note: String
+    var note: String = ""
     var belonging: Belonging?
 
     init(date: Date, kind: FundEntryKind, cents: Int, monthKey: String? = nil, note: String = "") {
@@ -158,8 +162,8 @@ final class FundEntry {
 /// bank. True savings = this minus everything set aside for replacements.
 @Model
 final class SavingsAccount {
-    var balanceCents: Int
-    var updatedAt: Date
+    var balanceCents: Int = 0
+    var updatedAt: Date = Date.now
 
     init(balanceCents: Int = 0, updatedAt: Date = .now) {
         self.balanceCents = balanceCents
@@ -168,7 +172,10 @@ final class SavingsAccount {
 
     @MainActor
     static func current(in context: ModelContext) -> SavingsAccount {
-        if let existing = try? context.fetch(FetchDescriptor<SavingsAccount>()).first {
+        // Newest first: after iCloud sync there can briefly be two (one per
+        // device) until SyncDeduplicator merges them.
+        let newest = FetchDescriptor<SavingsAccount>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)])
+        if let existing = try? context.fetch(newest).first {
             return existing
         }
         let account = SavingsAccount()

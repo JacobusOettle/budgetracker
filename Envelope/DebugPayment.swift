@@ -6,21 +6,21 @@ import SwiftData
 /// Shortcut Input actually maps onto our parameters.
 @Model
 final class DebugPayment {
-    var id: UUID
-    var receivedAt: Date
+    var id: UUID = UUID()
+    var receivedAt: Date = Date.now
     /// Which intent variant logged it: "text", "currency" or "simulated-…".
-    var source: String
+    var source: String = ""
     /// The amount exactly as received, before parsing.
-    var rawAmount: String
+    var rawAmount: String = ""
     /// Parsed amount in cents (never Double). nil if parsing failed.
     var amountCents: Int?
     var currencyCode: String?
-    var merchant: String
-    var card: String
+    var merchant: String = ""
+    var card: String = ""
     /// Optional: whatever Shortcut Input looks like when coerced to text.
-    var rawInput: String
+    var rawInput: String = ""
     /// Same source, amount, merchant and card within the duplicate window.
-    var possibleDuplicate: Bool
+    var possibleDuplicate: Bool = false
 
     init(
         receivedAt: Date,

@@ -33,6 +33,17 @@ mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
 cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
 echo "Signing $BUNDLE_ID with team $TEAM, profile $UUID, method $METHOD"
 
+# iCloud sync only if the profile allows it (App ID with the iCloud/CloudKit
+# capability); otherwise build without it so signing doesn't fail.
+CLOUD=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.icloud-container-identifiers:0' "$PLIST" 2>/dev/null || true)
+if [ -n "$CLOUD" ] && [ "$CLOUD" != "*" ]; then
+  echo "iCloud sync on: $CLOUD"
+  CLOUD_ARGS=(SPAAR_CLOUDKIT_CONTAINER="$CLOUD" CODE_SIGN_ENTITLEMENTS=Envelope/Envelope.entitlements)
+else
+  echo "::warning::Provisioning profile has no iCloud container; building without iCloud sync"
+  CLOUD_ARGS=(SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS=)
+fi
+
 if [ "$METHOD" = "development" ]; then IDENTITY="Apple Development"; else IDENTITY="Apple Distribution"; fi
 
 xcodebuild archive \
@@ -48,6 +59,7 @@ xcodebuild archive \
   PROVISIONING_PROFILE_SPECIFIER="$UUID" \
   CODE_SIGN_IDENTITY="$IDENTITY" \
   OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN" \
+  "${CLOUD_ARGS[@]}" \
   | xcpretty || exit "${PIPESTATUS[0]}"
 
 cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST

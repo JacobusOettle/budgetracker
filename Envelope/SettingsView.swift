@@ -39,12 +39,17 @@ struct SettingsView: View {
                 }
 
                 Section("Data") {
+                    NavigationLink {
+                        CloudSyncView()
+                    } label: {
+                        LabeledContent("iCloud sync", value: CloudSyncView.summary)
+                    }
                     Button("Import bank statement (CSV)…") { importingStatement = true }
                     NavigationLink("Export for AI analysis") { ExportView() }
                 }
 
                 Section {
-                    Text("Everything stays on this iPhone unless you use a cloud AI provider (Apple Intelligence runs on the phone). Spaar has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
+                    Text("Your data stays on your devices and, with iCloud sync on, in your own private iCloud, which only you can read. It only leaves them if you use a cloud AI provider (Apple Intelligence runs on the phone). Spaar has no account, no bank connection and no analytics. It can't block, move or change money. It only records what you tell it, and what Apple Pay reports through Shortcuts.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

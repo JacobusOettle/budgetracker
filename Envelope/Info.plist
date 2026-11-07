@@ -5,6 +5,15 @@
 	<!-- Name shown everywhere (also set as CFBundleDisplayName in project.yml). -->
 	<key>CFBundleName</key>
 	<string>Spaar</string>
+	<!-- iCloud container for sync. Empty in builds without the iCloud entitlement
+	     (sideloaded IPAs, tests): the app then never touches CloudKit. -->
+	<key>SpaarCloudKitContainer</key>
+	<string>$(SPAAR_CLOUDKIT_CONTAINER)</string>
+	<!-- iCloud sync wakes the app with silent pushes when another device changes data. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<!-- Allows plain-http calls to an AI model on the local network (Ollama, LM Studio).
 	     Internet providers still require HTTPS. -->
 	<key>NSAppTransportSecurity</key>

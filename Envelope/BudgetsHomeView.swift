@@ -75,7 +75,7 @@ struct BudgetsHomeView: View {
                     perform { try BudgetService.remove(budget, in: context) }
                 }
             } message: { budget in
-                Text(budget.payments.isEmpty
+                Text((budget.payments ?? []).isEmpty
                      ? "It has no payments and will be deleted."
                      : "Its payments stay in History under \(budget.name), and past months still add up.")
             }

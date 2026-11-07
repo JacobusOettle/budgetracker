@@ -3,7 +3,8 @@
 Spaar (Afrikaans for "save") is an iPhone budgeting app for rand. Tap a budget, such as Food, just
 before you pay with Apple Pay. An iOS Shortcuts **Wallet** automation then tells
 Spaar about the payment, and it's logged to that budget. Spaar never connects
-to a bank, has no account or analytics, and all data stays on the phone.
+to a bank, has no account or analytics, and all data stays on your devices
+and, with iCloud sync, in your own private iCloud.
 
 > **About the name.** The app is called **Spaar** on your home screen, in Shortcuts and in
 > notifications. Inside the code, the Xcode project, folders and bundle ID
@@ -288,6 +289,63 @@ field arrives empty. Only a real tap at a card machine counts.
 - A declined tap may still be logged. Delete it in History.
 - It can only be tested with real taps on a physical iPhone. The ▶︎ button in
   Shortcuts sends empty fields.
+
+## iCloud sync
+
+Spaar syncs budgets, payments, belongings, funds, month ends and the savings
+balance through the user's **private iCloud database** (SwiftData + CloudKit).
+There's no server and no account: data goes from the user's devices to their
+own iCloud, which only they can read. New iPhone: install Spaar, sign in with
+the same Apple Account, and the data arrives.
+
+**Not synced, per iPhone:** the Shortcuts Wallet automation (Apple doesn't let
+apps create or sync it; the in-app picture guide sets it up again), AI settings
+and API key (Keychain), reminders, notification permission.
+
+**Conflicts:** CloudKit keeps the latest change to each field. Things two
+phones can create twice before they've synced are merged automatically
+(`SyncDeduplicator`, run at launch and after every download), choosing the
+same survivor on every phone:
+- budgets with the same name (oldest kept, the other's payments move into it;
+  payments are never deleted)
+- a month closed on both phones (first close kept)
+- a monthly replacement contribution recorded on both (earliest kept)
+- the savings balance (latest kept)
+
+Known limit: two phones changing the savings balance at the same moment while
+offline keep only the later value.
+
+**Sideloaded builds can't sync:** iCloud needs the iCloud entitlement, which
+only a paid Apple Developer account can sign in. The unsigned CI IPA is built
+with sync off (`SPAAR_CLOUDKIT_CONTAINER` blank) and never touches CloudKit;
+Settings → iCloud sync says so.
+
+### One-time setup for TestFlight / the App Store
+
+1. **Decide the bundle ID first.** It's `com.jacobusoettle.envelope` and the
+   iCloud container is derived from it: `iCloud.<bundle id>`. Changing either
+   after release means existing users' iCloud data isn't found, so rename now
+   if you want (`PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`).
+2. In the [Apple Developer portal](https://developer.apple.com/account/resources/identifiers/list):
+   Identifiers → your App ID → enable **iCloud** (with CloudKit) and **Push
+   Notifications**. Under iCloud, create/assign the container
+   `iCloud.com.jacobusoettle.envelope`.
+3. In Xcode (Signing & Capabilities) the target already has
+   `Envelope/Envelope.entitlements` (iCloud/CloudKit, the container, push) and
+   the *Remote notifications* background mode in `Info.plist`. With automatic
+   signing Xcode registers the rest. For CI signing, regenerate the
+   provisioning profile after step 2; `ci/build_signed_ipa.sh` turns sync on
+   only when the profile contains an iCloud container.
+4. Run a development build on a device signed in to iCloud and use the app
+   (add a budget, a payment, a belonging, close a month) so the **Development**
+   CloudKit schema gets created.
+5. In [CloudKit Console](https://icloud.developer.apple.com/) → the container →
+   **Deploy Schema Changes** to Production. TestFlight and App Store builds use
+   Production; without this step they can't sync. Repeat after any model change.
+6. Model rules from now on (CloudKit): every stored property needs a default
+   value or must be optional, every relationship must be optional, no
+   `@Attribute(.unique)`. Adding fields is fine; renaming or deleting synced
+   fields isn't (Production schema can only grow).
 
 ## Installing on your iPhone
 
