@@ -36,9 +36,19 @@ echo "Signing $BUNDLE_ID with team $TEAM, profile $UUID, method $METHOD"
 # iCloud sync only if the profile allows it (App ID with the iCloud/CloudKit
 # capability); otherwise build without it so signing doesn't fail.
 CLOUD=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.icloud-container-identifiers:0' "$PLIST" 2>/dev/null || true)
+APS=$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' "$PLIST" 2>/dev/null || true)
 if [ -n "$CLOUD" ] && [ "$CLOUD" != "*" ]; then
-  echo "iCloud sync on: $CLOUD"
-  CLOUD_ARGS=(SPAAR_CLOUDKIT_CONTAINER="$CLOUD" CODE_SIGN_ENTITLEMENTS=Envelope/Envelope.entitlements)
+  ENT=Envelope/Envelope.entitlements
+  if [ -z "$APS" ]; then
+    # Sync still works without push; other devices' changes arrive when the
+    # app opens instead of straight away. Signing with aps-environment would fail.
+    echo "::warning::Profile has iCloud but no Push Notifications; building without push"
+    ENT="$RUNNER_TEMP/Envelope-nopush.entitlements"
+    cp Envelope/Envelope.entitlements "$ENT"
+    /usr/libexec/PlistBuddy -c 'Delete :aps-environment' "$ENT"
+  fi
+  echo "iCloud sync on: $CLOUD (push: ${APS:-none})"
+  CLOUD_ARGS=(SPAAR_CLOUDKIT_CONTAINER="$CLOUD" CODE_SIGN_ENTITLEMENTS="$ENT")
 else
   echo "::warning::Provisioning profile has no iCloud container; building without iCloud sync"
   CLOUD_ARGS=(SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS=)

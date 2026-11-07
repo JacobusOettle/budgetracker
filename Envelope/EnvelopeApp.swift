@@ -5,20 +5,25 @@ import UserNotifications
 @main
 struct EnvelopeApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .task {
                     CloudSyncMonitor.shared.start(container: Persistence.shared)
-                    if CloudSync.activeContainerID != nil {
-                        SyncDeduplicator.run(in: Persistence.shared.mainContext)
-                    }
+                    SyncDeduplicator.runIfNeeded(in: Persistence.shared.mainContext)
                     await Notifier.requestAuthorization()
                     await ReminderScheduler.apply()
                 }
         }
         .modelContainer(Persistence.shared)
+        .onChange(of: scenePhase) { _, phase in
+            // Merge iCloud duplicates while nothing is on screen.
+            if phase == .background {
+                SyncDeduplicator.runIfNeeded(in: Persistence.shared.mainContext)
+            }
+        }
     }
 }
 

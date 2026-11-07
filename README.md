@@ -298,19 +298,32 @@ There's no server and no account: data goes from the user's devices to their
 own iCloud, which only they can read. New iPhone: install Spaar, sign in with
 the same Apple Account, and the data arrives.
 
+**On by default for new installs; opt-in when the phone already has data.**
+Before the first sync, the store is copied to
+`Application Support/PreSyncBackup/<date>/`; Settings → iCloud sync can restore
+it (sync is then turned off so it isn't mixed with iCloud). This matters
+because iCloud removes synced data from a phone when the user signs out of
+iCloud, so data whose upload never finished (e.g. iCloud full) would otherwise
+be gone.
+
 **Not synced, per iPhone:** the Shortcuts Wallet automation (Apple doesn't let
 apps create or sync it; the in-app picture guide sets it up again), AI settings
 and API key (Keychain), reminders, notification permission.
 
 **Conflicts:** CloudKit keeps the latest change to each field. Things two
 phones can create twice before they've synced are merged automatically
-(`SyncDeduplicator`, run at launch and after every download), choosing the
-same survivor on every phone:
-- budgets with the same name (oldest kept, the other's payments move into it;
-  payments are never deleted)
+(`SyncDeduplicator`). It runs after an iCloud download, but only while the app
+is in the background or at the next launch, so nothing on screen disappears.
+Every phone picks the same survivor:
+- budgets with the same name **made on different installs** (the first-made
+  stays, the other's payments move into it, and it's archived with
+  `mergedIntoID` rather than deleted, so payments still syncing to it follow
+  later). Same-named budgets made on one phone are left alone.
 - a month closed on both phones (first close kept)
 - a monthly replacement contribution recorded on both (earliest kept)
-- the savings balance (latest kept)
+- the savings balance: the newest real balance wins; an account a new phone
+  created from scratch before its data arrived is *provisional* and only adds
+  its changes (e.g. money moved at a month end) to the real balance.
 
 Known limit: two phones changing the savings balance at the same moment while
 offline keep only the later value.
@@ -336,13 +349,19 @@ Settings → iCloud sync says so.
    signing Xcode registers the rest. For CI signing, regenerate the
    provisioning profile after step 2; `ci/build_signed_ipa.sh` turns sync on
    only when the profile contains an iCloud container.
-4. Run a development build on a device signed in to iCloud and use the app
-   (add a budget, a payment, a belonging, close a month) so the **Development**
-   CloudKit schema gets created.
+4. Run a **Debug** build on a device signed in to iCloud, open Settings →
+   iCloud sync → Developer → **Create CloudKit schema (Development)**. It
+   creates every record type and field in the Development environment (with a
+   throwaway store; your data isn't touched).
 5. In [CloudKit Console](https://icloud.developer.apple.com/) → the container →
    **Deploy Schema Changes** to Production. TestFlight and App Store builds use
    Production; without this step they can't sync. Repeat after any model change.
-6. Model rules from now on (CloudKit): every stored property needs a default
+6. **Free Apple ID (Personal Team) in Xcode** can't sign iCloud or push. To
+   build without sync, clear both *Code Signing Entitlements* and
+   `SPAAR_CLOUDKIT_CONTAINER` in the target's build settings (or pass
+   `SPAAR_CLOUDKIT_CONTAINER= CODE_SIGN_ENTITLEMENTS=` to xcodebuild). Clearing
+   the container matters: with it set but no entitlement, CloudKit would crash.
+7. Model rules from now on (CloudKit): every stored property needs a default
    value or must be optional, every relationship must be optional, no
    `@Attribute(.unique)`. Adding fields is fine; renaming or deleting synced
    fields isn't (Production schema can only grow).
@@ -356,8 +375,10 @@ Every app on an iPhone has to be signed by an Apple ID. Pick one option:
    `brew install xcodegen`.
 2. `git clone` this repo, then `cd budgetracker && xcodegen generate && open Envelope.xcodeproj`.
 3. Select the **Envelope** target → **Signing & Capabilities** → choose your Team.
-   A free Apple ID works. If Xcode says the bundle ID is taken, change
-   `com.jacobusoettle.envelope` to something unique.
+   A paid team builds with iCloud sync. With a free Apple ID, first clear
+   *Code Signing Entitlements* and `SPAAR_CLOUDKIT_CONTAINER` in Build Settings
+   (free accounts can't sign iCloud; see "iCloud sync"). If Xcode says the
+   bundle ID is taken, change `com.jacobusoettle.envelope` to something unique.
 4. Plug in your iPhone. On the phone, enable **Settings → Privacy & Security →
    Developer Mode** and restart.
 5. Pick the iPhone as the run destination and press **Run** (⌘R).

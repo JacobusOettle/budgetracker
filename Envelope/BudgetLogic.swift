@@ -107,6 +107,7 @@ enum MonthEnd {
     static func summary(budgets: [Budget], payments: [Payment], month: Date, calendar: Calendar = .current) -> MonthEndSummary {
         let interval = MonthMath.interval(containing: month, calendar: calendar)
         let lines = budgets
+            .filter { $0.mergedIntoID == nil }  // iCloud duplicates merged into another budget
             .filter { $0.createdAt < interval.end && ($0.archivedAt.map { $0 >= interval.start } ?? true) }
             .sorted { ($0.sortOrder, $0.name) < ($1.sortOrder, $1.name) }
             .map { MonthEndLine(name: $0.name, monthlyCents: $0.monthlyCents, spentCents: $0.spentCents(in: interval)) }

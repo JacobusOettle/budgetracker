@@ -31,11 +31,101 @@ enum CloudSync {
 
     static let enabledKey = "cloudSync.enabled"
 
-    /// The user's choice in Settings. On by default. Applied at launch.
+    /// The user's choice in Settings, applied at launch. See `decideDefault`.
     static var userWantsSync: Bool {
-        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
+        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? false }
         set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
     }
+
+    /// First launch with sync in the app: on for a fresh install, but off
+    /// when this phone already has data. Those users turn it on themselves
+    /// in Settings after reading what it does (and a backup is made first).
+    static func decideDefault(storeExists: Bool, defaults: UserDefaults = .standard) {
+        if defaults.object(forKey: enabledKey) == nil {
+            defaults.set(!storeExists, forKey: enabledKey)
+        }
+    }
+
+    /// A random id for this install (not synced). Stamped on new budgets so
+    /// duplicates can be told apart from budgets you named the same on purpose.
+    static var deviceID: String {
+        let key = "cloudSync.deviceID"
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }
+
+    // MARK: Backup before the first sync
+
+    static let backupDoneKey = "cloudSync.preSyncBackupDone"
+    static let backupPathKey = "cloudSync.preSyncBackupPath"
+    static let pendingRestoreKey = "cloudSync.pendingRestore"
+
+    static let storeFileSuffixes = ["", "-wal", "-shm"]
+
+    /// Copies the store (with its -wal/-shm files) aside once, before the
+    /// first launch that syncs, while nothing has it open. If iCloud ever
+    /// removes the data (e.g. signing out while uploads were failing), this
+    /// copy can be restored from Settings → iCloud sync. Returns false if
+    /// the copy failed; the caller then stays local for this launch.
+    static func backUpBeforeFirstSync(store: URL, defaults: UserDefaults = .standard, fm: FileManager = .default, now: Date = .now) -> Bool {
+        if defaults.bool(forKey: backupDoneKey) { return true }
+        guard fm.fileExists(atPath: store.path) else {
+            defaults.set(true, forKey: backupDoneKey)   // nothing to back up
+            return true
+        }
+        let stamp = ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-")
+        let dir = store.deletingLastPathComponent().appending(path: "PreSyncBackup").appending(path: stamp)
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            for suffix in storeFileSuffixes {
+                let source = URL(fileURLWithPath: store.path + suffix)
+                guard fm.fileExists(atPath: source.path) else { continue }
+                try fm.copyItem(at: source, to: dir.appending(path: store.lastPathComponent + suffix))
+            }
+            defaults.set(dir.path, forKey: backupPathKey)
+            defaults.set(true, forKey: backupDoneKey)
+            return true
+        } catch {
+            try? fm.removeItem(at: dir)
+            return false
+        }
+    }
+
+    /// The pre-sync backup, if one was made and still exists.
+    static func backupFolder(defaults: UserDefaults = .standard, fm: FileManager = .default) -> URL? {
+        guard let path = defaults.string(forKey: backupPathKey), fm.fileExists(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// Replaces the store with the backup. Only call before any container
+    /// has opened the store (i.e. at launch). Sync is turned off so the
+    /// restored copy isn't mixed with what's in iCloud.
+    static func restoreIfRequested(store: URL, defaults: UserDefaults = .standard, fm: FileManager = .default) {
+        guard let path = defaults.string(forKey: pendingRestoreKey) else { return }
+        defaults.removeObject(forKey: pendingRestoreKey)
+        let backup = URL(fileURLWithPath: path)
+        let backupStore = backup.appending(path: store.lastPathComponent)
+        guard fm.fileExists(atPath: backupStore.path) else { return }
+        do {
+            for suffix in storeFileSuffixes {
+                let target = URL(fileURLWithPath: store.path + suffix)
+                if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
+            }
+            for suffix in storeFileSuffixes {
+                let source = URL(fileURLWithPath: backupStore.path + suffix)
+                guard fm.fileExists(atPath: source.path) else { continue }
+                try fm.copyItem(at: source, to: URL(fileURLWithPath: store.path + suffix))
+            }
+            defaults.set(false, forKey: enabledKey)
+            restoredFromBackup = true
+        } catch {
+            launchError = "Couldn't restore the backup: \(error.localizedDescription)"
+        }
+    }
+
+    nonisolated(unsafe) static var restoredFromBackup = false
 
     /// Which container to sync with, or nil to keep everything on this phone.
     static func syncContainer(containerID: String?, userWantsSync: Bool) -> String? {
@@ -86,7 +176,9 @@ final class CloudSyncMonitor {
                 if succeeded {
                     self.lastSuccess = .now
                     self.lastError = nil
-                    if isImport { SyncDeduplicator.run(in: container.mainContext) }
+                    // Merging deletes records; do it when the UI isn't
+                    // showing them (app backgrounded, or next launch).
+                    if isImport { SyncDeduplicator.needsRun = true }
                 } else if let message {
                     self.lastError = message
                 }
@@ -133,21 +225,42 @@ final class CloudSyncMonitor {
 /// Two phones can each create the same thing before they've synced, e.g.
 /// both close November, or you add "Food" on a new phone before your data
 /// arrives. This merges those duplicates. Every phone picks the same record
-/// to keep, so they agree without talking to each other. Payments are never
-/// deleted: a duplicate budget's payments move to the one that's kept.
+/// to keep, so they agree without talking to each other. It runs after
+/// iCloud downloads, while the app isn't on screen (backgrounded or at the
+/// next launch), so nothing visible disappears underneath you.
+///
+/// It never merges what one phone made on purpose: budgets are only merged
+/// when they came from different installs, and payments are never deleted.
 enum SyncDeduplicator {
     struct Report: Equatable {
         var budgets = 0
+        var paymentsMoved = 0
         var monthCloses = 0
         var contributions = 0
         var savingsAccounts = 0
-        var total: Int { budgets + monthCloses + contributions + savingsAccounts }
+        var total: Int { budgets + paymentsMoved + monthCloses + contributions + savingsAccounts }
+    }
+
+    static let needsRunKey = "cloudSync.needsDedupe"
+    /// Set after an iCloud download; cleared once merged.
+    static var needsRun: Bool {
+        get { UserDefaults.standard.bool(forKey: needsRunKey) }
+        set { UserDefaults.standard.set(newValue, forKey: needsRunKey) }
+    }
+
+    /// Runs if a download happened since the last run.
+    @discardableResult
+    static func runIfNeeded(in context: ModelContext) -> Report? {
+        guard needsRun else { return nil }
+        needsRun = false
+        return run(in: context)
     }
 
     @discardableResult
     static func run(in context: ModelContext) -> Report {
         var report = Report()
         report.budgets = mergeBudgets(in: context)
+        report.paymentsMoved = movePaymentsOffMergedBudgets(in: context)
         report.monthCloses = mergeMonthCloses(in: context)
         report.contributions = mergeContributions(in: context)
         report.savingsAccounts = mergeSavingsAccounts(in: context)
@@ -155,26 +268,50 @@ enum SyncDeduplicator {
         return report
     }
 
-    /// Same name (ignoring case, accents and spaces), both active: keep the
-    /// oldest, move the other's payments into it.
+    /// Same name (ignoring case, accents and spaces), both active, made by
+    /// different installs: the first-made one stays and the other's payments
+    /// move into it. The other is archived with `mergedIntoID` (not deleted),
+    /// so payments still on their way to it from iCloud can follow later.
+    /// Budgets made before sync existed (no origin) count as one install.
     static func mergeBudgets(in context: ModelContext) -> Int {
-        let active = ((try? context.fetch(FetchDescriptor<Budget>())) ?? []).filter { $0.archivedAt == nil }
+        let active = ((try? context.fetch(FetchDescriptor<Budget>())) ?? [])
+            .filter { $0.archivedAt == nil && $0.mergedIntoID == nil }
         let groups = Dictionary(grouping: active) { normalizedName($0.name) }
-        var removed = 0
+        var merged = 0
         for (key, group) in groups where !key.isEmpty && group.count > 1 {
-            let sorted = group.sorted {
-                ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString)
-            }
+            let sorted = group.sorted { ($0.insertedAt, $0.id.uuidString) < ($1.insertedAt, $1.id.uuidString) }
             let keep = sorted[0]
-            for duplicate in sorted.dropFirst() {
+            for duplicate in sorted.dropFirst() where duplicate.originDevice != keep.originDevice {
                 for payment in duplicate.payments ?? [] { payment.budget = keep }
                 if keep.colorName.isEmpty { keep.colorName = duplicate.colorName }
                 if let armed = duplicate.armedAt, armed > (keep.armedAt ?? .distantPast) { keep.armedAt = armed }
-                context.delete(duplicate)
-                removed += 1
+                keep.createdAt = min(keep.createdAt, duplicate.createdAt)   // past months still add up
+                duplicate.armedAt = nil
+                duplicate.mergedIntoID = keep.id
+                duplicate.archivedAt = duplicate.archivedAt ?? .now
+                merged += 1
             }
         }
-        return removed
+        return merged
+    }
+
+    /// Payments that synced in pointing at a merged duplicate follow it.
+    static func movePaymentsOffMergedBudgets(in context: ModelContext) -> Int {
+        let budgets = (try? context.fetch(FetchDescriptor<Budget>())) ?? []
+        let byID = Dictionary(budgets.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var moved = 0
+        for duplicate in budgets {
+            guard var targetID = duplicate.mergedIntoID else { continue }
+            // Follow chains (A merged into B, B into C), with a loop guard.
+            var hops = 0
+            while let next = byID[targetID]?.mergedIntoID, hops < 10 { targetID = next; hops += 1 }
+            guard let target = byID[targetID], target !== duplicate else { continue }
+            for payment in duplicate.payments ?? [] {
+                payment.budget = target
+                moved += 1
+            }
+        }
+        return moved
     }
 
     /// One close per month: keep the first one made (a second close of the
@@ -212,14 +349,32 @@ enum SyncDeduplicator {
         return removed
     }
 
-    /// There is one savings balance: keep the most recently updated.
+    /// One savings balance. The newest balance you actually entered or that
+    /// was already there wins; an account a phone made from scratch before
+    /// its data arrived (provisional) only contributes its adds/subtracts.
     static func mergeSavingsAccounts(in context: ModelContext) -> Int {
         let all = (try? context.fetch(FetchDescriptor<SavingsAccount>())) ?? []
         guard all.count > 1 else { return 0 }
-        let sorted = all.sorted {
-            ($0.updatedAt, $0.balanceCents) > ($1.updatedAt, $1.balanceCents)
+        let real = all.filter { !$0.isProvisional }
+            .sorted { ($0.updatedAt, $0.balanceCents) > ($1.updatedAt, $1.balanceCents) }
+        let provisional = all.filter(\.isProvisional)
+            .sorted { ($0.updatedAt, $0.deltaCents) < ($1.updatedAt, $1.deltaCents) }
+        if let keep = real.first {
+            for p in provisional {
+                keep.balanceCents += p.deltaCents
+                keep.updatedAt = max(keep.updatedAt, p.updatedAt)
+                context.delete(p)
+            }
+            for duplicate in real.dropFirst() { context.delete(duplicate) }
+        } else if let keep = provisional.first {
+            // Still no real balance anywhere: combine the changes.
+            for p in provisional.dropFirst() {
+                keep.balanceCents += p.deltaCents
+                keep.deltaCents += p.deltaCents
+                keep.updatedAt = max(keep.updatedAt, p.updatedAt)
+                context.delete(p)
+            }
         }
-        for duplicate in sorted.dropFirst() { context.delete(duplicate) }
         return all.count - 1
     }
 
@@ -229,3 +384,35 @@ enum SyncDeduplicator {
             .joined(separator: " ")
     }
 }
+
+#if DEBUG
+/// Developer tool (Debug builds only): creates every record type and field
+/// in the CloudKit Development schema in one go, so it can be deployed to
+/// Production. Uses a throwaway store; your data isn't touched.
+enum CloudKitSchemaInitializer {
+    struct Failure: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    static func run(containerID: String) throws {
+        let url = URL.temporaryDirectory.appending(path: "spaar-schema-\(UUID().uuidString).sqlite")
+        let description = NSPersistentStoreDescription(url: url)
+        description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: containerID)
+        description.shouldAddStoreAsynchronously = false
+        guard let model = NSManagedObjectModel.makeManagedObjectModel(for: Persistence.modelTypes) else {
+            throw Failure(message: "Couldn't build the Core Data model from the SwiftData models.")
+        }
+        let container = NSPersistentCloudKitContainer(name: "SpaarSchema", managedObjectModel: model)
+        container.persistentStoreDescriptions = [description]
+        var loadError: Error?
+        container.loadPersistentStores { _, error in loadError = error }
+        if let loadError { throw loadError }
+        try container.initializeCloudKitSchema()
+        for store in container.persistentStoreCoordinator.persistentStores {
+            try container.persistentStoreCoordinator.remove(store)
+        }
+        try? FileManager.default.removeItem(at: url)
+    }
+}
+#endif

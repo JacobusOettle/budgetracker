@@ -18,6 +18,17 @@ final class Budget {
     var armedAt: Date?
     /// Tile colour (a BudgetPalette key). Empty = picked automatically.
     var colorName: String = ""
+    /// When this record was made. Unlike `createdAt` (which a statement
+    /// import moves back to the first imported month) it never changes, so
+    /// iCloud duplicate merging can rely on it.
+    var insertedAt: Date = Date.now
+    /// The install that made it (CloudSync.deviceID). Budgets with the same
+    /// name are only merged as sync duplicates when they came from different
+    /// installs. Empty for budgets made before iCloud sync existed.
+    var originDevice: String = ""
+    /// Merged into the budget with this id as an iCloud duplicate. Kept
+    /// (archived) so payments still syncing to it can be moved over.
+    var mergedIntoID: UUID?
 
     @Relationship(deleteRule: .nullify, inverse: \Payment.budget)
     var payments: [Payment]? = []
@@ -28,6 +39,8 @@ final class Budget {
         self.monthlyCents = monthlyCents
         self.sortOrder = sortOrder
         self.createdAt = createdAt
+        self.insertedAt = .now
+        self.originDevice = CloudSync.deviceID
     }
 
     func spentCents(in interval: DateInterval) -> Int {

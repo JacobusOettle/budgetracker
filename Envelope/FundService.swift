@@ -80,9 +80,7 @@ enum FundService {
             total += item.cents
         }
         if addToSavingsBalance && total > 0 {
-            let account = SavingsAccount.current(in: context)
-            account.balanceCents += total
-            account.updatedAt = .now
+            SavingsAccount.current(in: context).adjust(by: total)
         }
         try context.save()
         return total
@@ -137,9 +135,7 @@ enum FundService {
             context.insert(next)
             next.belonging = belonging
             if paidFromSavings {
-                let account = SavingsAccount.current(in: context)
-                account.balanceCents -= newPriceCents
-                account.updatedAt = .now
+                SavingsAccount.current(in: context).adjust(by: -newPriceCents)
             }
         } else {
             belonging.archived = true
@@ -160,9 +156,7 @@ enum FundService {
     }
 
     static func setSavingsBalance(_ cents: Int, in context: ModelContext) throws {
-        let account = SavingsAccount.current(in: context)
-        account.balanceCents = cents
-        account.updatedAt = .now
+        SavingsAccount.current(in: context).set(to: cents)
         try context.save()
     }
 }

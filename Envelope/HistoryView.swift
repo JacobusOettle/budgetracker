@@ -252,7 +252,7 @@ struct PaymentFormView: View {
 
     /// Active budgets, plus the payment's current one even if it was removed.
     private var budgetOptions: [Budget] {
-        allBudgets.filter { $0.archivedAt == nil || $0.id == payment?.budget?.id }
+        allBudgets.filter { ($0.archivedAt == nil && $0.mergedIntoID == nil) || $0.id == payment?.budget?.id }
     }
 
     var body: some View {

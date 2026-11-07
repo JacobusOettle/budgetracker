@@ -19,7 +19,7 @@ struct BelongingsView: View {
 
     var body: some View {
         let today = Date()
-        let total = accounts.first?.balanceCents ?? 0
+        let total = SavingsAccount.effectiveBalance(accounts)
         let setAside = (belongings + retired).reduce(0) { $0 + $1.fundBalanceCents }
         let trueSavings = SavingsSplit.trueSavings(totalCents: total, setAsideCents: setAside)
         let monthly = belongings.compactMap { $0.plan(today: today)?.monthlyCents }.reduce(0, +)

@@ -165,7 +165,8 @@ enum DataExport {
 
     private static func buildDocument(context: ModelContext, now: Date, calendar: Calendar) throws -> Document {
         let belongings = try context.fetch(FetchDescriptor<Belonging>(sortBy: [SortDescriptor(\.name)]))
-        let account = try context.fetch(FetchDescriptor<SavingsAccount>()).first
+        let accounts = try context.fetch(FetchDescriptor<SavingsAccount>(sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))
+        let account = accounts.first
         let spikeLog = try context.fetch(FetchDescriptor<DebugPayment>(sortBy: [SortDescriptor(\.receivedAt, order: .reverse)]))
         let budgets = try context.fetch(FetchDescriptor<Budget>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.name)]))
         let payments = try context.fetch(FetchDescriptor<Payment>(sortBy: [SortDescriptor(\.date, order: .reverse)]))
@@ -175,7 +176,7 @@ enum DataExport {
         let active = belongings.filter { !$0.archived }
         let setAside = belongings.reduce(0) { $0 + $1.fundBalanceCents }
         let monthly = active.compactMap { $0.plan(today: now, calendar: calendar)?.monthlyCents }.reduce(0, +)
-        let total = account?.balanceCents ?? 0
+        let total = SavingsAccount.effectiveBalance(accounts)
 
         let savings = SavingsDTO(
             totalZar: Money.plain(cents: total),
@@ -192,7 +193,7 @@ enum DataExport {
             exportedAt: timestamp(now),
             currency: "ZAR",
             savings: savings,
-            budgets: budgets.map { b in
+            budgets: budgets.filter { $0.mergedIntoID == nil }.map { b in
                 let spent = b.spentCents(in: monthInterval)
                 return BudgetDTO(
                     name: b.name,

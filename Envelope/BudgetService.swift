@@ -132,9 +132,7 @@ enum BudgetService {
         let close = MonthClose(monthKey: key, closedAt: now, summary: summary, movedCents: movedCents, replacementCents: replacement)
         context.insert(close)
         if movedCents != 0 {
-            let account = SavingsAccount.current(in: context)
-            account.balanceCents += movedCents
-            account.updatedAt = now
+            SavingsAccount.current(in: context).adjust(by: movedCents, at: now)
         }
         try context.save()
         return close

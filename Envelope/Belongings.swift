@@ -164,6 +164,13 @@ final class FundEntry {
 final class SavingsAccount {
     var balanceCents: Int = 0
     var updatedAt: Date = Date.now
+    /// Made by an add/subtract (e.g. a month end) when this phone had no
+    /// account yet, typically a new phone before iCloud data arrived. Its
+    /// real starting balance is unknown, so only its changes (`deltaCents`)
+    /// count; they're folded into the real balance when that arrives.
+    var isProvisional: Bool = false
+    /// Sum of the adds/subtracts made to a provisional account.
+    var deltaCents: Int = 0
 
     init(balanceCents: Int = 0, updatedAt: Date = .now) {
         self.balanceCents = balanceCents
@@ -179,7 +186,32 @@ final class SavingsAccount {
             return existing
         }
         let account = SavingsAccount()
+        account.isProvisional = true
         context.insert(account)
         return account
+    }
+
+    /// Adds (or with a negative amount subtracts) money.
+    func adjust(by cents: Int, at date: Date = .now) {
+        balanceCents += cents
+        if isProvisional { deltaCents += cents }
+        updatedAt = date
+    }
+
+    /// Sets the exact balance you entered: it's no longer provisional.
+    func set(to cents: Int, at date: Date = .now) {
+        balanceCents = cents
+        isProvisional = false
+        deltaCents = 0
+        updatedAt = date
+    }
+
+    /// The balance to show while iCloud duplicates haven't been merged yet:
+    /// the newest real balance plus changes made on provisional accounts.
+    static func effectiveBalance(_ accounts: [SavingsAccount]) -> Int {
+        let real = accounts.filter { !$0.isProvisional }.max { ($0.updatedAt, $0.balanceCents) < ($1.updatedAt, $1.balanceCents) }
+        let provisional = accounts.filter(\.isProvisional)
+        guard let real else { return provisional.reduce(0) { $0 + $1.balanceCents } }
+        return real.balanceCents + provisional.reduce(0) { $0 + $1.deltaCents }
     }
 }
