@@ -46,6 +46,8 @@ struct SettingsView: View {
                     }
                     Button("Import bank statement (CSV)…") { importingStatement = true }
                     NavigationLink("Export for AI analysis") { ExportView() }
+                    // TEMPORARY: moving data to the renamed app. Remove with TransferBackup.swift.
+                    NavigationLink("Move to new app (backup / restore)") { TransferView() }
                 }
 
                 Section {
